@@ -7,7 +7,7 @@ if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
 
 .\.venv\Scripts\python.exe -m pip install -U `
     sentence-transformers `
-    faiss-cpu `
+    chromadb `
     langgraph `
     langchain `
     langchain-openai `

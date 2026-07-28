@@ -11,7 +11,7 @@
 - Streamlit
 - FastAPI
 - MinerU / PyMuPDF
-- FAISS / numpy 向量检索
+- Chroma 向量数据库 / numpy 兜底检索
 - BM25 关键词检索
 - RRF 混合检索融合
 - 双分支 Rerank：轻量 CrossEncoder / BGE Reranker / 规则兜底
@@ -60,7 +60,7 @@ flowchart TD
 
 系统使用混合检索，而不是单纯向量检索：
 
-1. 向量检索：通过 embedding 召回语义相近的子文档块。
+1. 向量检索：通过 Chroma 存储 embedding，并召回语义相近的子文档块。
 2. BM25 检索：通过关键词匹配召回专业术语、矿物名称、元素符号和地名等精确词。
 3. RRF 融合：融合向量检索和关键词检索的排名。
 4. 父文档回填：命中子块后回填父文档上下文。
@@ -104,6 +104,16 @@ PARSER_FALLBACK=true
 项目的大模型层采用 OpenAI-compatible API 封装，不强绑定某个厂商模型。
 
 未配置 API Key 时，系统会降级到规则 Router、抽取式回答和规则校验，保证基础流程可运行。
+
+## 向量数据库
+
+项目默认使用 Chroma 作为向量数据库：
+
+```env
+VECTOR_BACKEND=chroma
+```
+
+入库时，系统会先对父子切片后的子文档生成 embedding，再写入 Chroma collection；检索时优先通过 Chroma 做语义召回，然后与 BM25 关键词检索结果进行 RRF 融合。如果本地没有安装 `chromadb` 或 Chroma 初始化失败，系统会自动回退到 numpy 向量检索，保证 Demo 不会因为依赖问题无法运行。
 
 配置 OpenAI：
 
@@ -174,7 +184,7 @@ src/mineru_ingest.py    MinerU 解析后端
 src/multimodal.py       多模态证据抽取与视觉摘要
 src/text_processing.py  文本清洗与切片
 src/parent_child.py     父子文档切片
-src/vector_store.py     向量检索、BM25、RRF 混合检索
+src/vector_store.py     Chroma 向量检索、BM25、RRF 混合检索
 src/rerank.py           CrossEncoder / BGE / 规则兜底重排
 src/llm.py              大模型调用、Router、生成与校验
 src/citation.py         引用校验

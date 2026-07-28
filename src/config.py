@@ -42,7 +42,7 @@ class AppConfig:
     max_images_per_pdf: int = 24
     max_image_summary_chars: int = 900
     vision_model: str = "gpt-4o-mini"
-    vector_backend: str = "faiss"
+    vector_backend: str = "chroma"
     embedding_backend: str = "auto"
     llm_backend: str = "auto"
     openai_model: str = "gpt-4o-mini"
@@ -107,7 +107,7 @@ class AppConfig:
             max_images_per_pdf=int(os.getenv("MAX_IMAGES_PER_PDF", "24")),
             max_image_summary_chars=int(os.getenv("MAX_IMAGE_SUMMARY_CHARS", "900")),
             vision_model=os.getenv("VISION_MODEL", "gpt-4o-mini"),
-            vector_backend=os.getenv("VECTOR_BACKEND", "faiss").lower(),
+            vector_backend=os.getenv("VECTOR_BACKEND", "chroma").lower(),
             embedding_backend=os.getenv("EMBEDDING_BACKEND", "auto").lower(),
             llm_backend=os.getenv("LLM_BACKEND", "auto").lower(),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
