@@ -10,7 +10,7 @@
 - LangChain / LangGraph
 - Streamlit
 - FastAPI
-- MinerU / Docling / PyMuPDF
+- MinerU / PyMuPDF
 - FAISS / numpy 向量检索
 - BM25 关键词检索
 - RRF 混合检索融合
@@ -90,7 +90,7 @@ MINERU_METHOD=auto
 
 MinerU 适合处理科研论文中的复杂版面、表格、公式、图片、图注和图文混排内容。系统会优先读取 MinerU 导出的结构化 JSON 或 Markdown，并将文本块、表格块、图片块和图注统一转换为可检索证据。
 
-如果 MinerU 不可用，系统可以回退到 Docling 或 PyMuPDF：
+如果 MinerU 不可用，系统可以回退到 PyMuPDF：
 
 ```env
 PARSER_FALLBACK=true
@@ -204,7 +204,6 @@ src/agent.py            LangGraph Agentic RAG 主流程
 src/api.py              FastAPI 服务
 src/pdf_ingest.py       PDF 入库统一入口
 src/mineru_ingest.py    MinerU 解析后端
-src/docling_ingest.py   Docling 解析后端
 src/multimodal.py       多模态证据抽取与视觉摘要
 src/text_processing.py  文本清洗与切片
 src/parent_child.py     父子文档切片
@@ -236,4 +235,3 @@ evaluation/feedback_bad_cases.jsonl
 ```
 
 请不要把真实 API Key、论文原文数据、本地索引、数据库或用户反馈数据上传到公开仓库。
-

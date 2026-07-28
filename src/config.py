@@ -27,11 +27,6 @@ class AppConfig:
     mineru_extra_args: str = ""
     mineru_timeout: int = 900
     mineru_export_artifacts: bool = True
-    docling_export_artifacts: bool = True
-    docling_use_hybrid_chunker: bool = True
-    docling_do_ocr: bool = False
-    docling_do_table_structure: bool = True
-    docling_include_tables: bool = True
     top_k: int = 10
     keyword_top_k: int = 10
     rerank_top_k: int = 5
@@ -96,14 +91,6 @@ class AppConfig:
             mineru_timeout=int(os.getenv("MINERU_TIMEOUT", "900")),
             mineru_export_artifacts=os.getenv("MINERU_EXPORT_ARTIFACTS", "true").lower()
             in {"1", "true", "yes", "on"},
-            docling_export_artifacts=os.getenv("DOCLING_EXPORT_ARTIFACTS", "true").lower()
-            in {"1", "true", "yes", "on"},
-            docling_use_hybrid_chunker=os.getenv("DOCLING_USE_HYBRID_CHUNKER", "true").lower()
-            in {"1", "true", "yes", "on"},
-            docling_do_ocr=os.getenv("DOCLING_DO_OCR", "false").lower() in {"1", "true", "yes", "on"},
-            docling_do_table_structure=os.getenv("DOCLING_DO_TABLE_STRUCTURE", "true").lower()
-            in {"1", "true", "yes", "on"},
-            docling_include_tables=os.getenv("DOCLING_INCLUDE_TABLES", "true").lower() in {"1", "true", "yes", "on"},
             top_k=int(os.getenv("TOP_K", "10")),
             keyword_top_k=int(os.getenv("KEYWORD_TOP_K", "10")),
             rerank_top_k=int(os.getenv("RERANK_TOP_K", "5")),

@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import AppConfig
-from .docling_ingest import DoclingUnavailableError, ingest_pdf_with_docling
 from .mineru_ingest import MinerUUnavailableError, ingest_pdf_with_mineru
 from .models import DocumentChunk
 from .multimodal import extract_multimodal_chunks
@@ -39,20 +38,6 @@ def ingest_pdf(pdf_path: Path, config: AppConfig) -> list[DocumentChunk]:
             if config.parser_backend == "mineru" and not config.parser_fallback:
                 raise
         if config.parser_backend == "mineru" and not config.parser_fallback:
-            return []
-
-    if config.parser_backend in {"docling", "auto"}:
-        try:
-            chunks = ingest_pdf_with_docling(pdf_path, config)
-            if chunks:
-                return maybe_add_multimodal_chunks(pdf_path, chunks, config)
-        except DoclingUnavailableError:
-            if config.parser_backend == "docling" and not config.parser_fallback:
-                raise
-        except Exception:
-            if config.parser_backend == "docling" and not config.parser_fallback:
-                raise
-        if config.parser_backend == "docling" and not config.parser_fallback:
             return []
 
     pages = extract_pdf_pages(pdf_path)
