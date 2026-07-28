@@ -66,32 +66,8 @@ flowchart TD
 4. 父文档回填：命中子块后回填父文档上下文。
 5. Rerank：对候选证据重新排序，选择最相关的片段进入生成节点。
 
-这种设计兼顾语义召回和术语精确匹配，适合科研论文中大量专有名词、英文术语、元素符号和表格数据并存的场景。
+兼顾语义召回和术语精确匹配，适合科研论文中大量专有名词、英文术语、元素符号和表格数据并存的场景。
 
-## Rerank 双分支
-
-项目支持两条模型重排分支，并保留规则兜底：
-
-```env
-RERANK_BACKEND=auto
-RERANK_MODEL=
-```
-
-本地轻量 CrossEncoder：
-
-```env
-RERANK_BACKEND=cross-encoder
-RERANK_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
-```
-
-BGE 多语言强重排：
-
-```env
-RERANK_BACKEND=bge
-RERANK_MODEL=BAAI/bge-reranker-v2-m3
-```
-
-`cross-encoder` 分支通过 `sentence-transformers` 的 `CrossEncoder` 对 query-document pair 打分，启动相对轻量，适合本地演示。`bge` 分支通过 `FlagEmbedding` 的 `FlagReranker` 加载 `BAAI/bge-reranker-v2-m3`，更适合中文问题检索英文科研 PDF 和多语言术语场景，但模型更大、推理更慢。若模型或依赖不可用，系统会自动回退到规则 Rerank，保证流程可运行。
 
 ## 上下文记忆
 
