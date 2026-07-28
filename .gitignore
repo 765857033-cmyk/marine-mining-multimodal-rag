@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+data/index/
+data/uploads/
+data/traces/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.log
+data/logs/
+evaluation/feedback_bad_cases.jsonl
+.env
