@@ -24,7 +24,7 @@ class ChromaBackendTests(unittest.TestCase):
         self.assertTrue(results)
         self.assertEqual(results[0].chunk.source, "demo.pdf")
 
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             index.save(Path(tmp))
             loaded = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
             self.assertTrue(loaded.load(Path(tmp)))
