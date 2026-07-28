@@ -124,40 +124,6 @@ CUSTOM_LLM_MODEL=你的模型名
 
 回答会被提示词约束为中文，即使上传的是英文 PDF，也会用中文作答。
 
-## 快速启动
-
-```powershell
-cd C:\Users\76585\Documents\Codex\2026-07-05\ne\outputs\mining-agentic-rag
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-streamlit run app.py
-```
-
-也可以直接运行：
-
-```powershell
-.\run.ps1
-```
-
-启动后访问：
-
-```text
-http://localhost:8501
-```
-
-## FastAPI 启动
-
-```powershell
-.\run_api.ps1
-```
-
-默认服务地址：
-
-```text
-http://localhost:8000
-```
 
 主要接口：
 
