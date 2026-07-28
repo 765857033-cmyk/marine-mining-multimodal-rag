@@ -14,7 +14,7 @@
 - FAISS / numpy 向量检索
 - BM25 关键词检索
 - RRF 混合检索融合
-- CrossEncoder / 规则 Rerank
+- 双分支 Rerank：轻量 CrossEncoder / BGE Reranker / 规则兜底
 - SQLite 上下文记忆与反馈存储
 - Pandas 结果展示与评测分析
 
@@ -24,7 +24,7 @@
 - 多模态解析：支持文本、表格、图片、图注、公式和页面快照等内容抽取。
 - 父子文档切片：小块用于精准检索，大块用于保留回答上下文。
 - 混合检索：向量语义检索 + BM25 关键词检索，并使用 RRF 进行结果融合。
-- Rerank 重排：优先使用 CrossEncoder，缺失依赖时降级为领域词和 query overlap 规则重排。
+- Rerank 重排：支持轻量 CrossEncoder 和 BGE `bge-reranker-v2-m3` 双分支，缺失依赖时降级为领域词和 query overlap 规则重排。
 - LLM Router：由大模型判断问题是否需要调用外部论文知识库。
 - Query Rewrite：对专业问题和追问问题进行查询改写，提高召回率。
 - Source Verification：判断检索证据是否足够支撑回答。
@@ -67,6 +67,31 @@ flowchart TD
 5. Rerank：对候选证据重新排序，选择最相关的片段进入生成节点。
 
 这种设计兼顾语义召回和术语精确匹配，适合科研论文中大量专有名词、英文术语、元素符号和表格数据并存的场景。
+
+## Rerank 双分支
+
+项目支持两条模型重排分支，并保留规则兜底：
+
+```env
+RERANK_BACKEND=auto
+RERANK_MODEL=
+```
+
+本地轻量 CrossEncoder：
+
+```env
+RERANK_BACKEND=cross-encoder
+RERANK_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+```
+
+BGE 多语言强重排：
+
+```env
+RERANK_BACKEND=bge
+RERANK_MODEL=BAAI/bge-reranker-v2-m3
+```
+
+`cross-encoder` 分支通过 `sentence-transformers` 的 `CrossEncoder` 对 query-document pair 打分，启动相对轻量，适合本地演示。`bge` 分支通过 `FlagEmbedding` 的 `FlagReranker` 加载 `BAAI/bge-reranker-v2-m3`，更适合中文问题检索英文科研 PDF 和多语言术语场景，但模型更大、推理更慢。若模型或依赖不可用，系统会自动回退到规则 Rerank，保证流程可运行。
 
 ## 上下文记忆
 
@@ -174,7 +199,7 @@ src/multimodal.py       多模态证据抽取与视觉摘要
 src/text_processing.py  文本清洗与切片
 src/parent_child.py     父子文档切片
 src/vector_store.py     向量检索、BM25、RRF 混合检索
-src/rerank.py           CrossEncoder 与规则重排
+src/rerank.py           CrossEncoder / BGE / 规则兜底重排
 src/llm.py              大模型调用、Router、生成与校验
 src/citation.py         引用校验
 src/memory.py           短期、摘要和长期记忆

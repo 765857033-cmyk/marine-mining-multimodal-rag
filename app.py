@@ -200,6 +200,19 @@ def main() -> None:
         config.top_k = st.slider("向量召回数量", 3, 30, config.top_k)
         config.keyword_top_k = st.slider("BM25 召回数量", 3, 30, config.keyword_top_k)
         config.rerank_top_k = st.slider("重排保留数量", 1, 10, config.rerank_top_k)
+        config.rerank_backend = st.selectbox(
+            "Rerank 分支",
+            options=["auto", "rule", "cross-encoder", "bge"],
+            index=["auto", "rule", "cross-encoder", "bge"].index(config.rerank_backend)
+            if config.rerank_backend in {"auto", "rule", "cross-encoder", "bge"}
+            else 0,
+        )
+        default_model = config.rerank_model
+        if not default_model and config.rerank_backend == "cross-encoder":
+            default_model = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+        if not default_model and config.rerank_backend == "bge":
+            default_model = "BAAI/bge-reranker-v2-m3"
+        config.rerank_model = st.text_input("Rerank 模型", value=default_model)
         config.max_retrieval_rounds = st.slider("最大检索轮次", 1, 3, config.max_retrieval_rounds)
         config.multi_query_count = st.slider("多查询改写数量", 1, 6, config.multi_query_count)
         config.min_keyword_coverage = st.slider("证据关键词覆盖阈值", 0.0, 0.8, config.min_keyword_coverage, 0.02)
@@ -223,6 +236,7 @@ def main() -> None:
         st.write(f"Citation validator: `{config.citation_validation_enabled}`")
         st.write(f"Parser: `{config.parser_backend}`")
         st.write("Retrieval: `hybrid(vector + BM25 + RRF)`")
+        st.write(f"Rerank: `{config.rerank_backend}` `{config.rerank_model or 'rule'}`")
         st.write(f"Parent-child: `{config.parent_child_enabled}`")
         st.write(f"Multimodal: `{config.multimodal_enabled}`")
         st.write(f"Vector backend: `{config.vector_backend}`")

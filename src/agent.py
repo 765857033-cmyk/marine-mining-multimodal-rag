@@ -50,7 +50,7 @@ class MiningRagAgent:
     ) -> None:
         self.vector_index = vector_index
         self.config = config
-        self.reranker = Reranker(config.rerank_model)
+        self.reranker = Reranker(config.rerank_model, config.rerank_backend)
         self.generator = AnswerGenerator(config)
         self.memory_store = memory_store or (MemoryStore(config.state_db_path) if config.memory_enabled else None)
         self._graph = self._build_graph()
@@ -340,6 +340,7 @@ class MiningRagAgent:
             kept=len(state.reranked),
             top_score=state.reranked[0].final_score if state.reranked else 0.0,
             model=self.config.rerank_model or "rule",
+            backend=self.reranker.active_backend,
         )
         return state
 

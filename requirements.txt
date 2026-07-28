@@ -14,5 +14,6 @@ sentence-transformers>=3.0
 rank-bm25>=0.2
 openai>=1.40
 langchain-openai>=0.1
+FlagEmbedding>=1.2
 # Optional heavy PDF parser. If installation is slow, run install_mineru.ps1 separately.
 mineru[core]>=3.0

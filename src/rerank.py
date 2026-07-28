@@ -8,27 +8,52 @@ from .text_processing import DOMAIN_TERMS, domain_term_hits
 
 
 class Reranker:
-    def __init__(self, model_name: str = "") -> None:
+    def __init__(self, model_name: str = "", backend: str = "auto") -> None:
+        self.backend = (backend or os.getenv("RERANK_BACKEND", "auto")).lower().replace("_", "-")
         self.model_name = model_name or os.getenv("RERANK_MODEL", "")
         self._model = None
+        self.active_backend = "rule"
         if self.model_name:
+            self._init_model()
+
+    def _init_model(self) -> None:
+        if self.backend in {"auto", "bge", "bge-reranker"} and "bge-reranker" in self.model_name.lower():
+            try:
+                from FlagEmbedding import FlagReranker
+
+                self._model = FlagReranker(self.model_name, use_fp16=False)
+                self.active_backend = "bge"
+                return
+            except Exception:
+                if self.backend in {"bge", "bge-reranker"}:
+                    return
+
+        if self.backend in {"auto", "cross-encoder", "crossencoder"}:
             try:
                 from sentence_transformers import CrossEncoder
 
                 self._model = CrossEncoder(self.model_name)
+                self.active_backend = "cross-encoder"
             except Exception:
                 self._model = None
+                self.active_backend = "rule"
 
     def rerank(self, question: str, results: list[RetrievalResult], top_k: int) -> list[RetrievalResult]:
         if not results:
             return []
         if self._model is not None:
             pairs = [(question, result.chunk.text) for result in results]
-            scores = self._model.predict(pairs)
+            if self.active_backend == "bge":
+                scores = self._model.compute_score(pairs)
+            else:
+                scores = self._model.predict(pairs)
+            if isinstance(scores, (float, int)):
+                scores = [scores]
             for result, score in zip(results, scores):
                 retrieval_reason = result.reason
                 result.rerank_score = float(score)
-                result.reason = f"{retrieval_reason}; rerank=cross-encoder" if retrieval_reason else "rerank=cross-encoder"
+                rerank_reason = f"rerank={self.active_backend}, model={self.model_name}"
+                result.reason = f"{retrieval_reason}; {rerank_reason}" if retrieval_reason else rerank_reason
         else:
             query_terms = set(_terms(question))
             for result in results:
