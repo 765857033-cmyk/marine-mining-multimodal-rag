@@ -20,6 +20,25 @@ class MinerUBackendTests(unittest.TestCase):
         self.assertTrue(any(chunk.metadata["parser"] == "mineru" for chunk in chunks))
         self.assertTrue(any(chunk.modality == "table" for chunk in chunks))
 
+    def test_content_list_summarizes_mineru_image_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            asset = Path(tmp) / "fig.png"
+            asset.write_bytes(b"fake-image")
+            items = [
+                {
+                    "type": "image",
+                    "page_idx": 2,
+                    "img_caption": "Fig. 5 REE pattern of cobalt-rich crust",
+                    "img_path": asset.name,
+                }
+            ]
+            with patch("src.mineru_ingest.summarize_mineru_image", return_value="视觉模型生成的中文图片摘要。"):
+                chunks = mineru_content_list_chunks(items, "demo.pdf", AppConfig(), Path(tmp))
+        image_chunks = [chunk for chunk in chunks if chunk.modality == "image"]
+        self.assertTrue(image_chunks)
+        self.assertIn("视觉模型生成的中文图片摘要", image_chunks[0].text)
+        self.assertEqual(image_chunks[0].metadata["asset_path"], str(asset))
+
     def test_markdown_fallback_creates_chunks(self):
         with tempfile.TemporaryDirectory() as tmp:
             markdown = Path(tmp) / "demo.md"
@@ -43,6 +62,10 @@ class MinerUBackendTests(unittest.TestCase):
             chunks = ingest_pdf(Path("demo.pdf"), AppConfig(parser_backend="mineru", multimodal_enabled=False))
         mocked.assert_called_once()
         self.assertEqual(chunks, expected)
+
+    def test_ingest_pdf_rejects_removed_pymupdf_backend(self):
+        with self.assertRaises(ValueError):
+            ingest_pdf(Path("demo.pdf"), AppConfig(parser_backend="pymupdf"))
 
 
 if __name__ == "__main__":

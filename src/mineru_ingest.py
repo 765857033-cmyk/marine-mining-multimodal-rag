@@ -10,6 +10,7 @@ from typing import Any
 
 from .config import AppConfig
 from .models import DocumentChunk
+from .multimodal import build_visual_chunk_text, summarize_mineru_image
 from .text_processing import normalize_text, pages_to_chunks
 
 
@@ -117,25 +118,30 @@ def mineru_content_list_chunks(
 ) -> list[DocumentChunk]:
     page_lines: dict[int, list[str]] = {}
     element_chunks: list[DocumentChunk] = []
+    image_count = 0
 
     for index, item in enumerate(items):
         page = extract_page(item)
         modality = infer_mineru_modality(item)
+        asset_path = resolve_asset_path(item, artifact_dir)
         text = item_to_text(item)
+        if modality == "image" and not text and asset_path:
+            text = item_heading(item) or f"图片证据：{asset_path.name}"
         if not text:
             continue
 
         prefix = {"table": "[Table]", "image": "[Figure]", "formula": "[Formula]"}.get(modality, "")
         page_lines.setdefault(page, []).append(f"{prefix} {text}".strip())
 
-        if modality in {"table", "image", "formula"} and len(text) >= 20:
-            asset_path = resolve_asset_path(item, artifact_dir)
+        if should_keep_element(modality, config, image_count) and len(text) >= 10:
+            if modality == "image":
+                image_count += 1
             element_chunks.append(
                 DocumentChunk(
                     chunk_id=make_mineru_id(source, page, modality, index, text),
                     source=source,
                     page=page,
-                    text=build_element_text(source, page, modality, text),
+                    text=build_element_text(source, page, modality, text, asset_path, config),
                     modality=modality,
                     metadata={
                         "parser": "mineru",
@@ -155,6 +161,16 @@ def mineru_content_list_chunks(
         chunk.metadata["parser"] = "mineru"
         chunk.metadata["mineru_export"] = "content_list"
     return text_chunks + element_chunks
+
+
+def should_keep_element(modality: str, config: AppConfig, image_count: int) -> bool:
+    if modality == "table":
+        return config.multimodal_enabled and config.extract_tables
+    if modality == "image":
+        return config.multimodal_enabled and config.extract_images and image_count < config.max_images_per_pdf
+    if modality == "formula":
+        return config.multimodal_enabled
+    return False
 
 
 def mineru_markdown_chunks(artifact_dir: Path, source: str, config: AppConfig) -> list[DocumentChunk]:
@@ -246,8 +262,27 @@ def item_heading(item: dict[str, Any]) -> str:
     return ""
 
 
-def build_element_text(source: str, page: int, modality: str, text: str) -> str:
+def build_element_text(source: str, page: int, modality: str, text: str, asset_path: Path | None, config: AppConfig) -> str:
     label = {"table": "表格", "image": "图片/图注", "formula": "公式"}.get(modality, modality)
+    if modality == "image" and asset_path:
+        summary = summarize_mineru_image(
+            asset_path=asset_path,
+            source=source,
+            page=page,
+            caption=text,
+            nearby_text=text,
+            config=config,
+        )
+        return build_visual_chunk_text(
+            source=source,
+            page=page,
+            modality="image",
+            caption=text,
+            summary=summary,
+            width=0,
+            height=0,
+            asset_path=asset_path,
+        )
     return (
         f"MinerU {label}证据 | source={source} | page={page}\n"
         f"该内容由 MinerU 从 PDF 版面中结构化解析，可用于科研文献问答、来源追溯和多模态证据检索。\n\n"

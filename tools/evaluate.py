@@ -52,7 +52,7 @@ def evaluate(
 ) -> dict[str, Any]:
     index = VectorIndex(EmbeddingProvider(config.embedding_backend), config.vector_backend)
     if not index.load(config.index_dir):
-        raise RuntimeError(f"Index not found: {config.index_dir}. Build the index in Streamlit or FastAPI first.")
+        raise RuntimeError(f"Index not found: {config.index_dir}. Build the index in React or FastAPI first.")
     agent = MiningRagAgent(index, config)
     judge = AnswerGenerator(config) if use_llm_judge else None
 

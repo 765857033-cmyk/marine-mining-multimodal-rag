@@ -1,7 +1,7 @@
 # CogDoc 设计升级说明
 
 本项目没有直接复制 CogDoc 的 Rust 内核或完整服务层，而是借鉴其设计思想，按当前
-LangGraph、Streamlit、FastAPI 和本地单机部署方式实现了四项能力。核心状态存储使用
+LangGraph、React、FastAPI 和本地单机部署方式实现了四项能力。核心状态存储使用
 Python 标准库 SQLite，不增加新的第三方依赖。
 
 ## 1. Citation Validator
@@ -40,7 +40,7 @@ Agent 记忆。
 - Source Verification 结果和检索轮次；
 - 每个节点的执行耗时。
 
-Trace 会展示在 Streamlit 右侧面板，并保存到 `data/traces/<trace_id>.json`。FastAPI
+Trace 会展示在 React 执行轨迹面板，并保存到 `data/traces/<trace_id>.json`。FastAPI
 提供 `GET /traces` 和 `GET /traces/{trace_id}`。
 
 ## 3. 分层记忆
@@ -64,7 +64,7 @@ Trace 会展示在 Streamlit 右侧面板，并保存到 `data/traces/<trace_id>
 - 问题类型；
 - 正确答案或纠正内容；
 - 待审核、通过、拒绝、已解决状态；
-- Streamlit 审核队列；
+- React 审核队列；
 - FastAPI 提交、查询和审核接口。
 
 负反馈或带纠错的反馈会写入 `evaluation/feedback_bad_cases.jsonl`，作为待人工审核的

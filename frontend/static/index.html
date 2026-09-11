@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>海洋矿产 Agentic RAG</title>
+    <script src="/vendor/react.production.min.js"></script>
+    <script src="/vendor/react-dom.production.min.js"></script>
+    <style>
+      :root {
+        color: #1b1f24;
+        background: #f6f7f9;
+        font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+        line-height: 1.5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      textarea,
+      select {
+        font: inherit;
+      }
+      .app-shell {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+      .sidebar {
+        background: #fff;
+        border-right: 1px solid #e3e6ea;
+        padding: 22px;
+      }
+      .brand h1,
+      .topbar h2,
+      .panel-title h3 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+      .brand h1 {
+        font-size: 20px;
+      }
+      .brand p,
+      .topbar p,
+      .hint {
+        color: #687380;
+        margin: 4px 0 0;
+      }
+      .panel,
+      .answer-section,
+      .empty,
+      .source-item {
+        background: #fff;
+        border: 1px solid #e2e7ee;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .panel + .panel,
+      .source-item + .source-item {
+        margin-top: 14px;
+      }
+      .panel-title {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .panel-title h3 {
+        font-size: 16px;
+      }
+      .file-picker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        border: 1px dashed #8ea4bd;
+        border-radius: 8px;
+        cursor: pointer;
+        color: #2f5c88;
+        margin-bottom: 10px;
+      }
+      .file-picker input {
+        display: none;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        min-height: 40px;
+        padding: 0 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+      .primary {
+        width: 100%;
+        background: #176d6a;
+        color: #fff;
+        font-weight: 700;
+      }
+      .secondary,
+      .ghost {
+        background: #edf2f7;
+        color: #1f374f;
+      }
+      .status-grid,
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .status {
+        min-width: 0;
+        border: 1px solid #e7ebf0;
+        border-radius: 8px;
+        padding: 10px;
+        background: #fafbfc;
+      }
+      .status span {
+        display: block;
+        color: #687380;
+        font-size: 12px;
+      }
+      .status strong {
+        display: block;
+        overflow-wrap: anywhere;
+        font-size: 14px;
+        margin-top: 2px;
+      }
+      .flow {
+        padding-left: 20px;
+        margin: 0;
+      }
+      .flow li {
+        margin: 6px 0;
+      }
+      .workspace {
+        padding: 24px;
+        overflow-y: auto;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .topbar h2 {
+        font-size: 25px;
+      }
+      .error {
+        background: #fff1f0;
+        color: #a43228;
+        border: 1px solid #ffc9c2;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 14px;
+      }
+      .ask-box {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 160px;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid #d5dce5;
+        border-radius: 8px;
+        background: #fff;
+        color: #1b1f24;
+      }
+      textarea {
+        min-height: 92px;
+        padding: 12px;
+        resize: vertical;
+      }
+      select {
+        min-height: 40px;
+        padding: 0 12px;
+      }
+      .ask-button {
+        height: 92px;
+      }
+      .answer-section {
+        margin-bottom: 14px;
+      }
+      .answer-header,
+      .source-item header,
+      .score-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+      }
+      .answer-section article {
+        white-space: pre-wrap;
+        margin: 8px 0 14px;
+      }
+      .badge {
+        border-radius: 999px;
+        padding: 7px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 700;
+      }
+      .badge.passed {
+        background: #eaf7ef;
+        color: #19733c;
+      }
+      .badge.failed {
+        background: #fff4e5;
+        color: #9a5a00;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin: 8px 0 14px;
+      }
+      .tabs button,
+      .segmented button {
+        background: #e9edf2;
+        color: #3d4752;
+      }
+      .tabs button.active,
+      .segmented button.active {
+        background: #1f374f;
+        color: #fff;
+      }
+      .source-item header span {
+        color: #176d6a;
+        font-weight: 700;
+      }
+      .score-row {
+        justify-content: flex-start;
+        color: #687380;
+        font-size: 13px;
+        margin: 8px 0;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-x: auto;
+        background: #f2f5f8;
+        border: 1px solid #e0e6ed;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .source-image {
+        display: block;
+        max-width: min(100%, 760px);
+        max-height: 420px;
+        object-fit: contain;
+        border: 1px solid #dde5ee;
+        border-radius: 8px;
+        margin: 10px 0;
+        background: #fff;
+      }
+      .feedback {
+        display: grid;
+        gap: 10px;
+      }
+      .segmented {
+        display: flex;
+        gap: 8px;
+      }
+      .empty {
+        display: flex;
+        min-height: 240px;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        color: #687380;
+      }
+      @media (max-width: 980px) {
+        .app-shell {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid #e3e6ea;
+        }
+        .ask-box {
+          grid-template-columns: 1fr;
+        }
+        .ask-button {
+          height: 44px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      const h = React.createElement;
+      const API_BASE = "";
+      const defaultQuestion = "多金属结核成矿受哪些环境因素控制？";
+
+      function App() {
+        const [health, setHealth] = React.useState(null);
+        const [stats, setStats] = React.useState(null);
+        const [files, setFiles] = React.useState([]);
+        const [question, setQuestion] = React.useState(defaultQuestion);
+        const [answer, setAnswer] = React.useState(null);
+        const [memory, setMemory] = React.useState(null);
+        const [feedback, setFeedback] = React.useState({ rating: 1, issue_type: "", correction: "", comment: "" });
+        const [sessionId] = React.useState(() => crypto.randomUUID());
+        const [activeTab, setActiveTab] = React.useState("sources");
+        const [loading, setLoading] = React.useState("");
+        const [error, setError] = React.useState("");
+
+        React.useEffect(() => {
+          refreshStatus();
+        }, []);
+
+        async function api(path, options = {}) {
+          const response = await fetch(API_BASE + path, options);
+          const contentType = response.headers.get("content-type") || "";
+          const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+          if (!response.ok) {
+            const detail = payload && payload.detail ? payload.detail : payload || "请求失败";
+            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+          }
+          return payload;
+        }
+
+        async function refreshStatus() {
+          setError("");
+          try {
+            const payloads = await Promise.all([api("/health"), api("/index/stats")]);
+            setHealth(payloads[0]);
+            setStats(payloads[1]);
+          } catch (err) {
+            setError(err.message);
+          }
+        }
+
+        async function uploadAndBuild() {
+          if (!files.length) {
+            setError("请先选择至少一篇 PDF。");
+            return;
+          }
+          setLoading("upload");
+          setError("");
+          try {
+            const form = new FormData();
+            files.forEach((file) => form.append("files", file));
+            await api("/documents/upload", { method: "POST", body: form });
+            await refreshStatus();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading("");
+          }
+        }
+
+        async function ask() {
+          if (!question.trim()) return;
+          setLoading("chat");
+          setError("");
+          try {
+            const payload = await api("/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ question: question.trim(), session_id: sessionId, memory_scope: "default" }),
+            });
+            setAnswer(payload);
+            setActiveTab("sources");
+            setMemory(await api("/memory/" + sessionId));
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading("");
+          }
+        }
+
+        async function clearMemory() {
+          setLoading("memory");
+          setError("");
+          try {
+            await api("/memory/" + sessionId, { method: "DELETE" });
+            setMemory(null);
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading("");
+          }
+        }
+
+        async function submitFeedback() {
+          if (!answer) return;
+          setLoading("feedback");
+          setError("");
+          try {
+            await api("/feedback", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                trace_id: answer.trace_id,
+                session_id: sessionId,
+                rating: Number(feedback.rating),
+                question: answer.question,
+                answer: answer.answer,
+                issue_type: feedback.issue_type,
+                correction: feedback.correction,
+                comment: feedback.comment,
+                citations: answer.citation_validation || {},
+                evidence: answer.sources || [],
+              }),
+            });
+            setFeedback({ rating: 1, issue_type: "", correction: "", comment: "" });
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading("");
+          }
+        }
+
+        const modalityText = stats && stats.modalities
+          ? Object.entries(stats.modalities).map(([key, value]) => translateModality(key) + " " + value).join(" / ")
+          : "暂无";
+
+        return h("main", { className: "app-shell" },
+          h("aside", { className: "sidebar" },
+            h("div", { className: "brand" },
+              h("div", null,
+                h("h1", null, "海洋矿产 Agentic RAG"),
+                h("p", null, "多模态科研文献智能问答")
+              )
+            ),
+            h(Panel, { title: "知识库" },
+              h("label", { className: "file-picker" },
+                files.length ? "已选择 " + files.length + " 个 PDF" : "选择论文 PDF",
+                h("input", { type: "file", multiple: true, accept: ".pdf", onChange: (event) => setFiles(Array.from(event.target.files || [])) })
+              ),
+              h("button", { className: "primary", onClick: uploadAndBuild, disabled: loading === "upload" }, loading === "upload" ? "解析中..." : "解析并建立索引"),
+              h("div", { className: "status-grid" },
+                h(Status, { label: "索引状态", value: health && health.index_loaded ? "已加载" : "未加载" }),
+                h(Status, { label: "解析器", value: (health && health.parser_backend ? health.parser_backend : "MinerU") + " / " + (health && health.mineru_method ? health.mineru_method : "auto") }),
+                h(Status, { label: "向量库", value: health && health.vector_backend ? health.vector_backend : "Chroma" }),
+                h(Status, { label: "模态", value: modalityText }),
+                h(Status, { label: "视觉模型", value: health && health.multimodal_enabled ? (health.vision_model || "已启用") : "未启用" }),
+                h(Status, { label: "多 Agent", value: health && health.agents ? health.agents.join(" / ") : "已启用" })
+              )
+            ),
+            h(Panel, { title: "Agent 流程" },
+              h("ol", { className: "flow" },
+                h("li", null, "DocParserAgent：MinerU 解析、OCR、图片语义摘要"),
+                h("li", null, "KnowledgeExtractAgent：父子切片、Embedding、Chroma/BM25"),
+                h("li", null, "QAAgent：Router、改写、检索、重排、生成、校验")
+              )
+            ),
+            h(Panel, { title: "会话记忆" },
+              h("button", { className: "secondary", onClick: clearMemory, disabled: loading === "memory" }, "清空当前会话记忆"),
+              h("p", { className: "hint" }, "短期滑动窗口 + 摘要记忆 + 显式长期记忆。")
+            )
+          ),
+          h("section", { className: "workspace" },
+            h("header", { className: "topbar" },
+              h("div", null,
+                h("h2", null, "智能问答工作台"),
+                h("p", null, "上传英文或中文论文后，系统统一使用中文回答并给出来源页码。")
+              ),
+              h("button", { className: "ghost", onClick: refreshStatus }, "刷新状态")
+            ),
+            error ? h("div", { className: "error" }, error) : null,
+            h("section", { className: "ask-box" },
+              h("textarea", { value: question, onChange: (event) => setQuestion(event.target.value) }),
+              h("button", { className: "primary ask-button", onClick: ask, disabled: loading === "chat" }, loading === "chat" ? "回答中..." : "开始问答")
+            ),
+            answer ? h(AnswerView, { answer, activeTab, setActiveTab, memory, feedback, setFeedback, submitFeedback, loading }) :
+              h("section", { className: "empty" }, h("p", null, "还没有回答。上传论文并建立索引后，可以开始多轮中文问答。"))
+          )
+        );
+      }
+
+      function Panel(props) {
+        return h("section", { className: "panel" },
+          h("div", { className: "panel-title" }, h("h3", null, props.title)),
+          props.children
+        );
+      }
+
+      function Status(props) {
+        return h("div", { className: "status" },
+          h("span", null, props.label),
+          h("strong", null, String(props.value ?? "暂无"))
+        );
+      }
+
+      function AnswerView({ answer, activeTab, setActiveTab, memory, feedback, setFeedback, submitFeedback, loading }) {
+        return h(React.Fragment, null,
+          h("section", { className: "answer-section" },
+            h("div", { className: "answer-header" },
+              h("div", { className: "panel-title" }, h("h3", null, "回答")),
+              h("span", { className: "badge " + (answer.verification_passed ? "passed" : "failed") }, answer.verification_passed ? "证据充分" : "证据不足")
+            ),
+            h("article", null, answer.answer),
+            h("div", { className: "metrics" },
+              h(Status, { label: "路径", value: answer.route }),
+              h(Status, { label: "检索轮次", value: answer.retrieval_rounds }),
+              h(Status, { label: "路由置信度", value: Number(answer.router_confidence || 0).toFixed(2) }),
+              h(Status, { label: "改写查询", value: answer.rewritten_query || "无" })
+            ),
+            h("p", { className: "hint" }, "路由原因：" + (answer.router_reason || "无"))
+          ),
+          h("section", { className: "tabs" },
+            [["sources", "来源证据"], ["trace", "执行轨迹"], ["memory", "记忆"], ["feedback", "反馈"]].map(([key, label]) =>
+              h("button", { key, className: activeTab === key ? "active" : "", onClick: () => setActiveTab(key) }, label)
+            )
+          ),
+          activeTab === "sources" ? h(Sources, { sources: answer.sources || [] }) : null,
+          activeTab === "trace" ? h("section", { className: "panel" }, h("p", { className: "hint" }, "trace_id：" + answer.trace_id), h("pre", null, JSON.stringify(answer.trace_events || answer.trace || [], null, 2))) : null,
+          activeTab === "memory" ? h("section", { className: "panel" }, h("pre", null, JSON.stringify(memory || answer.memory || {}, null, 2))) : null,
+          activeTab === "feedback" ? h(Feedback, { value: feedback, setValue: setFeedback, submit: submitFeedback, loading: loading === "feedback" }) : null
+        );
+      }
+
+      function Sources({ sources }) {
+        if (!sources.length) return h("section", { className: "panel" }, "暂无来源证据。");
+        return h("section", null, sources.map((source, index) =>
+          h("article", { className: "source-item", key: source.source + source.page + index },
+            h("header", null,
+              h("strong", null, "[" + (index + 1) + "] " + source.source + " p." + source.page),
+              h("span", null, translateModality(source.modality))
+            ),
+            h("div", { className: "score-row" },
+              h("span", null, "混合分 " + score(source.score)),
+              h("span", null, "向量 " + score(source.vector_score)),
+              h("span", null, "关键词 " + score(source.keyword_score)),
+              h("span", null, "重排 " + score(source.final_score))
+            ),
+            source.matched_child_text ? h("pre", null, source.matched_child_text) : null,
+            source.asset_url ? h("img", { className: "source-image", src: source.asset_url, alt: source.source + " 第 " + source.page + " 页图片证据" }) : null,
+            h("p", null, source.text_preview)
+          )
+        ));
+      }
+
+      function Feedback({ value, setValue, submit, loading }) {
+        const update = (key, next) => setValue((current) => Object.assign({}, current, { [key]: next }));
+        return h("section", { className: "panel feedback" },
+          h("div", { className: "segmented" },
+            h("button", { className: Number(value.rating) === 1 ? "active" : "", onClick: () => update("rating", 1) }, "有帮助"),
+            h("button", { className: Number(value.rating) === -1 ? "active" : "", onClick: () => update("rating", -1) }, "有问题")
+          ),
+          h("select", { value: value.issue_type, onChange: (event) => update("issue_type", event.target.value) },
+            ["", "证据不足", "引用错误", "事实错误", "回答不完整", "其他"].map((item) => h("option", { key: item, value: item }, item || "选择问题类型"))
+          ),
+          h("textarea", { placeholder: "期望答案或纠错说明", value: value.correction, onChange: (event) => update("correction", event.target.value) }),
+          h("textarea", { placeholder: "补充备注", value: value.comment, onChange: (event) => update("comment", event.target.value) }),
+          h("button", { className: "primary", onClick: submit, disabled: loading }, loading ? "提交中..." : "提交反馈")
+        );
+      }
+
+      function translateModality(modality) {
+        return { text: "文本", table: "表格", image: "图片", formula: "公式", page_snapshot: "页面截图" }[modality] || modality || "未知";
+      }
+
+      function score(value) {
+        return Number(value || 0).toFixed(3);
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+    </script>
+  </body>
+</html>

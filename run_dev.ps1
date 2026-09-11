@@ -9,5 +9,6 @@ if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
 $port = Resolve-ApiPort
-Write-Host "服务地址: http://127.0.0.1:$port"
-.\.venv\Scripts\python.exe -m uvicorn src.api:app --host 127.0.0.1 --port $port
+Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$PSScriptRoot\run_api.ps1`""
+
+Write-Host "FastAPI / React: http://127.0.0.1:$port"

@@ -1,6 +1,6 @@
 # 基于 Agentic RAG 的海洋矿产科研文献智能问答系统
 
-这是一个面向海洋矿产与深海科研论文的智能问答 Agent 项目。系统支持 PDF 文献解析、文本清洗、父子文档切片、混合检索、Rerank、LLM Router、答案生成、来源追溯、引用校验、证据充分性判断、低置信度重检索、上下文记忆、Trace Debug、用户反馈闭环、FastAPI 服务化和离线评测。
+这是一个面向海洋矿产与深海科研论文的智能问答 Agent 项目。系统支持 PDF 文献解析、文本清洗、父子文档切片、混合检索、Rerank、LLM Router、答案生成、来源追溯、引用校验、证据充分性判断、低置信度重检索、上下文记忆、Trace Debug、用户反馈闭环、FastAPI 服务化、React 可视化前端和离线评测。
 
 项目适合用于海洋矿产、深海多金属结核、富钴结壳、热液硫化物、地球化学指标、矿物识别和科研文献阅读场景。
 
@@ -8,20 +8,20 @@
 
 - Python
 - LangChain / LangGraph
-- Streamlit
 - FastAPI
-- MinerU / PyMuPDF
+- React
+- MinerU
 - Chroma 向量数据库 / numpy 兜底检索
 - BM25 关键词检索
 - RRF 混合检索融合
 - 双分支 Rerank：轻量 CrossEncoder / BGE Reranker / 规则兜底
 - SQLite 上下文记忆与反馈存储
-- Pandas 结果展示与评测分析
 
 ## 核心功能
 
 - PDF 文献入库：支持科研 PDF 上传、解析、清洗、切片和索引构建。
-- 多模态解析：支持文本、表格、图片、图注、公式和页面快照等内容抽取。
+- 多模态解析：支持文本、表格、图片、图注和公式等内容抽取。
+- 语义级图片理解：MinerU 抽取图片资产后，可调用视觉模型生成中文摘要并作为图片证据入库。
 - 父子文档切片：小块用于精准检索，大块用于保留回答上下文。
 - 混合检索：向量语义检索 + BM25 关键词检索，并使用 RRF 进行结果融合。
 - Rerank 重排：支持轻量 CrossEncoder 和 BGE `bge-reranker-v2-m3` 双分支，缺失依赖时降级为领域词和 query overlap 规则重排。
@@ -34,7 +34,28 @@
 - Trace Debug：记录每个 Agent 节点的输入、输出、耗时和关键决策。
 - 反馈闭环：支持用户点赞、点踩、纠错和人工审核，负反馈可进入评测坏例集。
 - FastAPI 服务化：提供文档上传、索引构建、问答、记忆、反馈和 trace 查询接口。
+- 多 Agent 编排：拆分为 DocParserAgent、KnowledgeExtractAgent 和 QAAgent，不包含增量更新 Agent。
 - 离线评测：支持 Hit@K、MRR、Citation Accuracy、Faithfulness、Refusal Accuracy 等指标。
+
+## 多 Agent 架构
+
+项目采用 3 个 Agent 分工，不启用增量更新 Agent：
+
+```mermaid
+flowchart LR
+    A[用户上传 PDF] --> B[DocParserAgent 文档解析]
+    B --> C[KnowledgeExtractAgent 知识抽取与索引构建]
+    C --> D[Chroma / BM25 知识库]
+    E[用户问题] --> F[QAAgent 问答 Agent]
+    F --> D
+    F --> G[中文回答 + 来源 + Trace]
+```
+
+- DocParserAgent：负责调用 MinerU，完成 PDF 版面解析、OCR、表格/公式/图片/图注抽取和图片中文语义摘要。
+- KnowledgeExtractAgent：负责结构化证据清洗、父子文档切片、Embedding、Chroma 向量入库和 BM25 关键词索引构建。
+- QAAgent：负责调用内部 LangGraph Agentic RAG 流程，完成 LLM Router、Query Rewrite、混合检索、Rerank、答案生成、引用校验、证据验证和记忆写入。
+
+没有加入 KnowledgeUpdateAgent，因为当前项目定位是实习简历中的科研 PDF 问答系统，知识库更新采用“上传文档后重建索引”的方式，更容易保证来源一致性和可追溯性。
 
 ## Agent 工作流
 
@@ -85,19 +106,50 @@ flowchart TD
 
 ```env
 PARSER_BACKEND=mineru
+PARSER_FALLBACK=false
 MINERU_BACKEND=pipeline
 MINERU_METHOD=auto
 ```
 
 MinerU 适合处理科研论文中的复杂版面、表格、公式、图片、图注和图文混排内容。系统会优先读取 MinerU 导出的结构化 JSON 或 Markdown，并将文本块、表格块、图片块和图注统一转换为可检索证据。
 
-如果 MinerU 不可用，系统可以回退到 PyMuPDF：
+项目已取消 PyMuPDF 兜底解析。如果 MinerU 不可用，入库会直接失败并提示安装或配置 MinerU，避免不同解析器造成文档结构不一致。
 
 ```env
-PARSER_FALLBACK=true
+MINERU_METHOD=ocr
 ```
 
-如果配置视觉模型 API，图片和页面快照可以生成中文摘要后进入检索系统，用于支持多模态问答。
+如果 PDF 是扫描件或图片型论文，可以把 `MINERU_METHOD` 设置为 `ocr`。OCR 在文档入库阶段自动执行，不需要人工逐页操作。
+
+如果配置支持视觉输入的 OpenAI-compatible API，MinerU 抽取到的图片会生成中文语义摘要后进入检索系统，用于支持多模态问答。这个步骤位于“PDF 解析 -> 结构化块转换 -> 多模态图片摘要 -> 父子切片 -> Chroma/BM25 入库”之间。
+
+## 前端运行
+
+项目已使用 React 替换 Streamlit。React 静态前端由 FastAPI 直接托管，不需要 npm 构建步骤：
+
+```powershell
+.\run_api.ps1
+```
+
+访问：
+
+```text
+http://127.0.0.1:8000
+```
+
+如果 8000 端口已被其他服务占用，启动脚本会自动切换到：
+
+```text
+http://127.0.0.1:8001
+```
+
+也可以运行：
+
+```powershell
+.\run.ps1
+```
+
+React 前端支持 PDF 上传、索引构建、中文问答、来源证据、Agent 执行轨迹、记忆查看和反馈提交。
 
 ## 大模型配置
 
@@ -138,7 +190,7 @@ CUSTOM_LLM_MODEL=你的模型名
 
 主要接口：
 
-- `POST /ingest`：上传 PDF 并构建索引
+- `POST /documents/upload`：上传 PDF 并构建索引
 - `POST /chat`：Agentic RAG 问答
 - `GET /memory/{session_id}`：查询会话记忆
 - `DELETE /memory/{session_id}`：清空会话记忆
@@ -176,7 +228,7 @@ python tools/evaluate.py --dataset evaluation/sample_eval.jsonl
 ## 项目结构
 
 ```text
-app.py                  Streamlit 可视化问答界面
+frontend/               React 可视化问答界面
 src/agent.py            LangGraph Agentic RAG 主流程
 src/api.py              FastAPI 服务
 src/pdf_ingest.py       PDF 入库统一入口

@@ -20,7 +20,7 @@ class AppConfig:
     child_chunk_size: int = 420
     child_chunk_overlap: int = 80
     parser_backend: str = "mineru"
-    parser_fallback: bool = True
+    parser_fallback: bool = False
     mineru_command: str = "mineru"
     mineru_backend: str = "pipeline"
     mineru_method: str = "auto"
@@ -38,7 +38,6 @@ class AppConfig:
     multimodal_enabled: bool = True
     extract_tables: bool = True
     extract_images: bool = True
-    render_page_snapshots: bool = False
     max_images_per_pdf: int = 24
     max_image_summary_chars: int = 900
     vision_model: str = "gpt-4o-mini"
@@ -84,7 +83,7 @@ class AppConfig:
             child_chunk_size=int(os.getenv("CHILD_CHUNK_SIZE", "420")),
             child_chunk_overlap=int(os.getenv("CHILD_CHUNK_OVERLAP", "80")),
             parser_backend=os.getenv("PARSER_BACKEND", "mineru").lower(),
-            parser_fallback=os.getenv("PARSER_FALLBACK", "true").lower() in {"1", "true", "yes", "on"},
+            parser_fallback=os.getenv("PARSER_FALLBACK", "false").lower() in {"1", "true", "yes", "on"},
             mineru_command=os.getenv("MINERU_COMMAND", "mineru"),
             mineru_backend=os.getenv("MINERU_BACKEND", "pipeline"),
             mineru_method=os.getenv("MINERU_METHOD", "auto"),
@@ -103,7 +102,6 @@ class AppConfig:
             multimodal_enabled=os.getenv("MULTIMODAL_ENABLED", "true").lower() in {"1", "true", "yes", "on"},
             extract_tables=os.getenv("EXTRACT_TABLES", "true").lower() in {"1", "true", "yes", "on"},
             extract_images=os.getenv("EXTRACT_IMAGES", "true").lower() in {"1", "true", "yes", "on"},
-            render_page_snapshots=os.getenv("RENDER_PAGE_SNAPSHOTS", "false").lower() in {"1", "true", "yes", "on"},
             max_images_per_pdf=int(os.getenv("MAX_IMAGES_PER_PDF", "24")),
             max_image_summary_chars=int(os.getenv("MAX_IMAGE_SUMMARY_CHARS", "900")),
             vision_model=os.getenv("VISION_MODEL", "gpt-4o-mini"),

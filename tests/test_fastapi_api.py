@@ -19,7 +19,7 @@ class FastApiTests(unittest.TestCase):
                 feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
                 embedding_backend="hashing",
                 vector_backend="numpy",
-                parser_backend="pymupdf",
+                parser_backend="mineru",
             )
             client = TestClient(create_app(config))
 
@@ -30,6 +30,23 @@ class FastApiTests(unittest.TestCase):
             stats = client.get("/index/stats")
             self.assertEqual(stats.status_code, 200)
             self.assertEqual(stats.json()["parent_chunks"], 0)
+
+    def test_static_react_frontend_is_served(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = AppConfig(
+                index_dir=Path(tmp) / "index",
+                upload_dir=Path(tmp) / "uploads",
+                state_db_path=Path(tmp) / "state.db",
+                trace_dir=Path(tmp) / "traces",
+                feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
+                embedding_backend="hashing",
+                vector_backend="numpy",
+            )
+            client = TestClient(create_app(config))
+            response = client.get("/")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("React", response.text)
+            self.assertIn("海洋矿产 Agentic RAG", response.text)
 
     def test_chat_requires_question(self):
         with tempfile.TemporaryDirectory() as tmp:

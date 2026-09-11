@@ -7,6 +7,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import MiningRagAgent
@@ -14,8 +16,8 @@ from .config import AppConfig
 from .feedback import FeedbackStore
 from .memory import MemoryStore
 from .models import AgentAnswer
+from .multi_agents import MultiAgentRagSystem
 from .observability import list_traces, load_trace
-from .pdf_ingest import ingest_pdfs
 from .vector_store import EmbeddingProvider, VectorIndex
 
 
@@ -65,7 +67,20 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         description="FastAPI service for PDF ingestion, Agentic RAG chat, and source tracing.",
         version="1.0.0",
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8001",
+            "http://localhost:8001",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.state.config = config or AppConfig.from_env()
+    app.state.config.upload_dir.mkdir(parents=True, exist_ok=True)
     app.state.lock = RLock()
     app.state.memory_store = MemoryStore(app.state.config.state_db_path)
     app.state.feedback_store = FeedbackStore(
@@ -84,6 +99,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             "embedding_backend": cfg.embedding_backend,
             "vector_backend": cfg.vector_backend,
             "llm_backend": cfg.llm_backend,
+            "mineru_backend": cfg.mineru_backend,
+            "mineru_method": cfg.mineru_method,
+            "multimodal_enabled": cfg.multimodal_enabled,
+            "vision_model": cfg.vision_model,
+            "rerank_backend": cfg.rerank_backend,
+            "multi_agent_enabled": True,
+            "agents": app.state.multi_agent_system.agent_names,
         }
 
     @app.get("/index/stats")
@@ -104,13 +126,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     def chat(request: ChatRequest) -> dict[str, Any]:
         try:
             with app.state.lock:
-                answer = app.state.agent.invoke(
+                answer = app.state.multi_agent_system.answer(
                     request.question,
                     history=[message.model_dump() for message in request.history],
                     session_id=request.session_id,
                     memory_scope=request.memory_scope,
                 )
-                return serialize_answer(request.question, answer, app.state.index_loaded)
+                return serialize_answer(request.question, answer, app.state.index_loaded, app.state.config)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
@@ -199,30 +221,35 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="No PDF files found for rebuild.")
         return rebuild_from_paths(app, pdf_paths)
 
+    mount_frontend(app)
     return app
+
+
+def mount_frontend(app: FastAPI) -> None:
+    cfg: AppConfig = app.state.config
+    app.mount("/assets", StaticFiles(directory=cfg.upload_dir), name="assets")
+    frontend_static = Path(__file__).resolve().parents[1] / "frontend" / "static"
+    if frontend_static.exists():
+        app.mount("/", StaticFiles(directory=frontend_static, html=True), name="frontend")
 
 
 def rebuild_from_paths(app: FastAPI, pdf_paths: list[Path]) -> dict[str, Any]:
     cfg: AppConfig = app.state.config
     try:
-        chunks = ingest_pdfs(pdf_paths, cfg)
-        index = VectorIndex(EmbeddingProvider(cfg.embedding_backend), cfg.vector_backend)
-        index.build(
-            chunks,
-            parent_child_enabled=cfg.parent_child_enabled,
-            child_chunk_size=cfg.child_chunk_size,
-            child_chunk_overlap=cfg.child_chunk_overlap,
-        )
-        index.save(cfg.index_dir)
+        result = app.state.multi_agent_system.rebuild_knowledge_base(pdf_paths)
+        index = result["index"]
         with app.state.lock:
             load_agent_runtime(app)
         return {
             "status": "ok",
-            "uploaded_sources": [path.name for path in pdf_paths],
+            "uploaded_sources": result["uploaded_sources"],
             "parent_chunks": len(index.parent_chunks),
             "search_chunks": len(index.search_chunks),
-            "modalities": count_modalities(index.parent_chunks),
+            "modalities": result["modalities"],
             "index_dir": str(cfg.index_dir),
+            "multi_agent_trace_id": result["trace_id"],
+            "multi_agent_trace_events": result["trace_events"],
+            "agents": result["agents"],
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Index rebuild failed: {exc}") from exc
@@ -233,10 +260,11 @@ def load_agent_runtime(app: FastAPI) -> None:
     index = VectorIndex(EmbeddingProvider(cfg.embedding_backend), cfg.vector_backend)
     app.state.index_loaded = index.load(cfg.index_dir)
     app.state.index = index
+    app.state.multi_agent_system = MultiAgentRagSystem(cfg, index, memory_store=app.state.memory_store)
     app.state.agent = MiningRagAgent(index, cfg, memory_store=app.state.memory_store)
 
 
-def serialize_answer(question: str, answer: AgentAnswer, index_loaded: bool) -> dict[str, Any]:
+def serialize_answer(question: str, answer: AgentAnswer, index_loaded: bool, config: AppConfig) -> dict[str, Any]:
     return {
         "question": question,
         "answer": answer.answer,
@@ -250,7 +278,7 @@ def serialize_answer(question: str, answer: AgentAnswer, index_loaded: bool) -> 
         "verification_reason": answer.verification_reason,
         "retrieval_rounds": answer.retrieval_rounds,
         "index_loaded": index_loaded,
-        "sources": [serialize_source(result) for result in answer.sources],
+        "sources": [serialize_source(result, config) for result in answer.sources],
         "trace": answer.trace,
         "trace_id": answer.trace_id,
         "trace_events": answer.trace_events,
@@ -259,7 +287,7 @@ def serialize_answer(question: str, answer: AgentAnswer, index_loaded: bool) -> 
     }
 
 
-def serialize_source(result) -> dict[str, Any]:
+def serialize_source(result, config: AppConfig) -> dict[str, Any]:
     chunk = result.chunk
     return {
         "source": chunk.source,
@@ -276,8 +304,21 @@ def serialize_source(result) -> dict[str, Any]:
         "heading": chunk.metadata.get("heading", ""),
         "matched_child_text": chunk.metadata.get("matched_child_text", ""),
         "text_preview": chunk.text[:700],
+        "asset_url": asset_url(chunk.metadata.get("asset_path", ""), config),
         "metadata": safe_metadata(chunk.metadata),
     }
+
+
+def asset_url(asset_path: str, config: AppConfig) -> str:
+    if not asset_path:
+        return ""
+    try:
+        path = Path(asset_path).resolve()
+        upload_dir = config.upload_dir.resolve()
+        relative = path.relative_to(upload_dir)
+    except Exception:
+        return ""
+    return "/assets/" + "/".join(relative.parts)
 
 
 def safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:

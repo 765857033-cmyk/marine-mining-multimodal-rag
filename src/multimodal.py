@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from .config import AppConfig
-from .models import DocumentChunk
 from .text_processing import normalize_text
 
 
@@ -17,222 +16,22 @@ FIGURE_CAPTION_PATTERN = re.compile(
 )
 
 
-def extract_multimodal_chunks(pdf_path: Path, config: AppConfig) -> list[DocumentChunk]:
-    if not config.multimodal_enabled:
-        return []
-    try:
-        import fitz
-    except ImportError as exc:
-        raise RuntimeError("PyMuPDF is not installed. Run: pip install -r requirements.txt") from exc
-
-    artifact_dir = config.upload_dir / "_multimodal" / pdf_path.stem
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    chunks: list[DocumentChunk] = []
-    image_count = 0
-
-    with fitz.open(pdf_path) as doc:
-        for page_index, page in enumerate(doc, start=1):
-            page_text = normalize_text(page.get_text("text", sort=True))
-            captions = extract_captions(page_text)
-
-            if config.extract_tables:
-                chunks.extend(extract_table_chunks(page, pdf_path.name, page_index))
-
-            if config.extract_images and image_count < config.max_images_per_pdf:
-                image_chunks, used = extract_image_chunks(
-                    doc=doc,
-                    page=page,
-                    source=pdf_path.name,
-                    page_index=page_index,
-                    page_text=page_text,
-                    captions=captions,
-                    artifact_dir=artifact_dir,
-                    start_index=image_count,
-                    max_count=config.max_images_per_pdf - image_count,
-                    config=config,
-                )
-                chunks.extend(image_chunks)
-                image_count += used
-
-            if config.render_page_snapshots:
-                snapshot = render_page_snapshot(
-                    page=page,
-                    source=pdf_path.name,
-                    page_index=page_index,
-                    page_text=page_text,
-                    captions=captions,
-                    artifact_dir=artifact_dir,
-                    config=config,
-                )
-                if snapshot is not None:
-                    chunks.append(snapshot)
-
-    return chunks
-
-
-def extract_table_chunks(page: Any, source: str, page_index: int) -> list[DocumentChunk]:
-    try:
-        tables = page.find_tables()
-    except Exception:
-        return []
-
-    chunks: list[DocumentChunk] = []
-    for table_index, table in enumerate(getattr(tables, "tables", []), start=1):
-        try:
-            rows = table.extract()
-        except Exception:
-            continue
-        markdown = rows_to_markdown(rows)
-        if len(markdown) < 40:
-            continue
-        text = (
-            f"表格证据 | source={source} | page={page_index} | table={table_index}\n"
-            f"该表格来自海洋矿产科研 PDF，可用于回答元素含量、样品指标、站位、矿物组成、"
-            f"地球化学参数和对比分析问题。\n\n{markdown}"
-        )
-        chunks.append(
-            DocumentChunk(
-                chunk_id=make_multimodal_id(source, page_index, "table", table_index, markdown),
-                source=source,
-                page=page_index,
-                text=text,
-                modality="table",
-                metadata={"table_index": table_index, "heading": f"Table {table_index}", "asset_path": ""},
-            )
-        )
-    return chunks
-
-
-def extract_image_chunks(
-    doc: Any,
-    page: Any,
+def summarize_mineru_image(
+    asset_path: Path,
     source: str,
-    page_index: int,
-    page_text: str,
-    captions: list[str],
-    artifact_dir: Path,
-    start_index: int,
-    max_count: int,
+    page: int,
+    caption: str,
+    nearby_text: str,
     config: AppConfig,
-) -> tuple[list[DocumentChunk], int]:
-    chunks: list[DocumentChunk] = []
-    images = page.get_images(full=True)
-    used = 0
-    seen_xrefs: set[int] = set()
-    for image_index, image_info in enumerate(images, start=1):
-        if used >= max_count:
-            break
-        xref = int(image_info[0])
-        if xref in seen_xrefs:
-            continue
-        seen_xrefs.add(xref)
-        try:
-            extracted = doc.extract_image(xref)
-        except Exception:
-            continue
-
-        image_bytes = extracted.get("image", b"")
-        ext = extracted.get("ext", "png")
-        width = int(extracted.get("width", 0) or 0)
-        height = int(extracted.get("height", 0) or 0)
-        if len(image_bytes) < 2_000 or width < 80 or height < 80:
-            continue
-
-        asset_name = f"p{page_index:03d}_img{start_index + used + 1:03d}.{ext}"
-        asset_path = artifact_dir / asset_name
-        asset_path.write_bytes(image_bytes)
-        caption = nearest_caption(captions, image_index)
-        summary = summarize_image(
-            image_path=asset_path,
-            source=source,
-            page=page_index,
-            modality="image",
-            caption=caption,
-            page_text=page_text,
-            config=config,
-        )
-        text = build_visual_chunk_text(
-            source=source,
-            page=page_index,
-            modality="image",
-            caption=caption,
-            summary=summary,
-            width=width,
-            height=height,
-            asset_path=asset_path,
-        )
-        chunks.append(
-            DocumentChunk(
-                chunk_id=make_multimodal_id(source, page_index, "image", image_index, text),
-                source=source,
-                page=page_index,
-                text=text,
-                modality="image",
-                metadata={
-                    "image_index": image_index,
-                    "asset_path": str(asset_path),
-                    "caption": caption,
-                    "width": width,
-                    "height": height,
-                    "heading": caption[:120] if caption else f"Image {image_index}",
-                },
-            )
-        )
-        used += 1
-    return chunks, used
-
-
-def render_page_snapshot(
-    page: Any,
-    source: str,
-    page_index: int,
-    page_text: str,
-    captions: list[str],
-    artifact_dir: Path,
-    config: AppConfig,
-) -> DocumentChunk | None:
-    try:
-        import fitz
-
-        pixmap = page.get_pixmap(matrix=fitz.Matrix(1.25, 1.25), alpha=False)
-        asset_path = artifact_dir / f"p{page_index:03d}_snapshot.png"
-        pixmap.save(asset_path)
-    except Exception:
-        return None
-
-    caption = "；".join(captions[:3])
-    summary = summarize_image(
+) -> str:
+    return summarize_image(
         image_path=asset_path,
         source=source,
-        page=page_index,
-        modality="page_snapshot",
+        page=page,
+        modality="image",
         caption=caption,
-        page_text=page_text,
+        page_text=nearby_text,
         config=config,
-    )
-    text = build_visual_chunk_text(
-        source=source,
-        page=page_index,
-        modality="page_snapshot",
-        caption=caption,
-        summary=summary,
-        width=getattr(pixmap, "width", 0),
-        height=getattr(pixmap, "height", 0),
-        asset_path=asset_path,
-    )
-    return DocumentChunk(
-        chunk_id=make_multimodal_id(source, page_index, "page_snapshot", 0, text),
-        source=source,
-        page=page_index,
-        text=text,
-        modality="page_snapshot",
-        metadata={
-            "asset_path": str(asset_path),
-            "caption": caption,
-            "width": getattr(pixmap, "width", 0),
-            "height": getattr(pixmap, "height", 0),
-            "heading": f"Page snapshot {page_index}",
-        },
     )
 
 
@@ -245,12 +44,16 @@ def summarize_image(
     page_text: str,
     config: AppConfig,
 ) -> str:
-    if not os.getenv("OPENAI_API_KEY"):
+    endpoint = resolve_vision_endpoint(config)
+    if endpoint is None:
         return fallback_visual_summary(source, page, modality, caption, page_text, image_path)
     try:
         from openai import OpenAI
 
-        client = OpenAI()
+        client_kwargs: dict[str, Any] = {"api_key": endpoint["api_key"], "timeout": config.llm_timeout}
+        if endpoint["base_url"]:
+            client_kwargs["base_url"] = endpoint["base_url"]
+        client = OpenAI(**client_kwargs)
         encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
         mime = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
         prompt = (
@@ -263,7 +66,7 @@ def summarize_image(
             f"\n页面文本摘录：{page_text[:1200]}"
         )
         response = client.chat.completions.create(
-            model=config.vision_model,
+            model=endpoint["model"],
             temperature=0.1,
             messages=[
                 {
@@ -279,6 +82,47 @@ def summarize_image(
         return content[: config.max_image_summary_chars].strip()
     except Exception as exc:
         return fallback_visual_summary(source, page, modality, caption, page_text, image_path, error=str(exc))
+
+
+def resolve_vision_endpoint(config: AppConfig) -> dict[str, str] | None:
+    backend = config.llm_backend.lower()
+    if backend == "auto":
+        if os.getenv("OPENAI_API_KEY"):
+            backend = "openai"
+        elif os.getenv("CUSTOM_LLM_API_KEY") and config.custom_llm_base_url:
+            backend = "openai-compatible"
+        elif os.getenv("OCEANGPT_API_KEY") and config.oceangpt_base_url:
+            backend = "ocean-gpt-api"
+        else:
+            return None
+
+    if backend == "openai":
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if not api_key:
+            return None
+        return {"api_key": api_key, "base_url": config.openai_base_url, "model": config.vision_model}
+
+    if backend in {"openai-compatible", "custom"}:
+        api_key = os.getenv("CUSTOM_LLM_API_KEY", "")
+        if not api_key or not config.custom_llm_base_url:
+            return None
+        return {
+            "api_key": api_key,
+            "base_url": config.custom_llm_base_url,
+            "model": config.vision_model or config.custom_llm_model,
+        }
+
+    if backend in {"ocean-gpt", "oceangpt", "ocean-gpt-api"}:
+        api_key = os.getenv("OCEANGPT_API_KEY", "")
+        if not api_key or not config.oceangpt_base_url:
+            return None
+        return {
+            "api_key": api_key,
+            "base_url": config.oceangpt_base_url,
+            "model": config.vision_model or config.oceangpt_model,
+        }
+
+    return None
 
 
 def fallback_visual_summary(
