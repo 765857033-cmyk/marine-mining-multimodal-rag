@@ -26,7 +26,7 @@ class ParentChildTests(unittest.TestCase):
             + " 稀有标记词 xyz-parent-child-marker 表明这里是关键证据。"
             + " 后续部分给出完整上下文。" * 20
         )
-        index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+        index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
         index.build(
             [DocumentChunk("raw-1", "demo.pdf", 2, parent_text)],
             parent_child_enabled=True,
@@ -40,16 +40,16 @@ class ParentChildTests(unittest.TestCase):
         self.assertIn("matched_child_text", results[0].chunk.metadata)
 
     def test_parent_child_index_roundtrip(self):
-        index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+        index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
         index.build(
             [DocumentChunk("raw-1", "demo.pdf", 1, "多金属结核成矿环境。" * 40)],
             parent_child_enabled=True,
             child_chunk_size=160,
             child_chunk_overlap=20,
         )
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             index.save(Path(tmp))
-            loaded = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+            loaded = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
             self.assertTrue(loaded.load(Path(tmp)))
             self.assertTrue(loaded.parent_chunks)
             self.assertTrue(loaded.search_chunks)

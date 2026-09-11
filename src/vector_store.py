@@ -80,12 +80,13 @@ class VectorIndex:
     def __init__(self, embedding: EmbeddingProvider, backend: str = "chroma") -> None:
         self.embedding = embedding
         self.backend = backend.lower()
+        if self.backend != "chroma":
+            raise ValueError("项目已取消 numpy/FAISS 兜底检索，请使用 VECTOR_BACKEND=chroma。")
         self.chunks: list[DocumentChunk] = []
         self.parent_chunks: list[DocumentChunk] = []
         self.search_chunks: list[DocumentChunk] = []
         self.parent_lookup: dict[str, DocumentChunk] = {}
         self.embeddings: np.ndarray = np.zeros((0, embedding.dim), dtype=np.float32)
-        self._faiss_index = None
         self._chroma_client = None
         self._chroma_collection = None
         self._chroma_path: Path | None = None
@@ -113,8 +114,7 @@ class VectorIndex:
         self.parent_lookup = {chunk.parent_id or chunk.chunk_id: chunk for chunk in self.parent_chunks}
         self.embeddings = self.embedding.embed_documents([chunk.text for chunk in self.search_chunks])
         self._build_keyword_index()
-        self._build_chroma_if_available()
-        self._build_faiss_if_available()
+        self._build_chroma()
 
     def _build_keyword_index(self) -> None:
         self._tokenized_chunks = [_tokenize(chunk.text) for chunk in self.search_chunks]
@@ -128,23 +128,11 @@ class VectorIndex:
             for token, df in document_frequency.items()
         }
 
-    def _build_faiss_if_available(self) -> None:
-        self._faiss_index = None
-        if self.backend != "faiss" or len(self.embeddings) == 0:
-            return
-        try:
-            import faiss
-
-            self._faiss_index = faiss.IndexFlatIP(self.embeddings.shape[1])
-            self._faiss_index.add(self.embeddings.astype(np.float32))
-        except Exception:
-            self._faiss_index = None
-
-    def _build_chroma_if_available(self, persist_path: Path | None = None) -> None:
+    def _build_chroma(self, persist_path: Path | None = None) -> None:
         self._chroma_client = None
         self._chroma_collection = None
         self._chroma_path = persist_path
-        if self.backend != "chroma" or len(self.embeddings) == 0:
+        if len(self.embeddings) == 0:
             return
         try:
             import chromadb
@@ -181,9 +169,8 @@ class VectorIndex:
             )
             self._chroma_client = client
             self._chroma_collection = collection
-        except Exception:
-            self._chroma_client = None
-            self._chroma_collection = None
+        except Exception as exc:
+            raise RuntimeError("Chroma 初始化失败，请确认已安装 chromadb 且索引目录可写。") from exc
 
     def search(self, query: str, top_k: int, keyword_top_k: int | None = None) -> list[RetrievalResult]:
         return self.hybrid_search(query, top_k=top_k, keyword_top_k=keyword_top_k or top_k)
@@ -197,68 +184,41 @@ class VectorIndex:
         if not self.search_chunks:
             return []
         query_vector = self.embedding.embed_query(query).astype(np.float32)
-        if self._chroma_collection is not None:
-            try:
-                payload = self._chroma_collection.query(
-                    query_embeddings=[query_vector.astype(float).tolist()],
-                    n_results=min(top_k, len(self.search_chunks)),
-                    include=["distances", "metadatas"],
+        if self._chroma_collection is None:
+            raise RuntimeError("Chroma collection 未初始化，无法执行向量检索。")
+        payload = self._chroma_collection.query(
+            query_embeddings=[query_vector.astype(float).tolist()],
+            n_results=min(top_k, len(self.search_chunks)),
+            include=["distances", "metadatas"],
+        )
+        ids = payload.get("ids", [[]])[0]
+        distances = payload.get("distances", [[]])[0]
+        metadatas = payload.get("metadatas", [[]])[0]
+        results: list[RetrievalResult] = []
+        for item_id, distance, metadata in zip(ids, distances, metadatas):
+            index = int((metadata or {}).get("index", -1))
+            if index < 0:
+                index = next(
+                    (
+                        candidate
+                        for candidate, chunk in enumerate(self.search_chunks)
+                        if chunk.chunk_id == item_id
+                    ),
+                    -1,
                 )
-                ids = payload.get("ids", [[]])[0]
-                distances = payload.get("distances", [[]])[0]
-                metadatas = payload.get("metadatas", [[]])[0]
-                results: list[RetrievalResult] = []
-                for item_id, distance, metadata in zip(ids, distances, metadatas):
-                    index = int((metadata or {}).get("index", -1))
-                    if index < 0:
-                        index = next(
-                            (
-                                candidate
-                                for candidate, chunk in enumerate(self.search_chunks)
-                                if chunk.chunk_id == item_id
-                            ),
-                            -1,
-                        )
-                    if index < 0 or index >= len(self.search_chunks):
-                        continue
-                    score = 1.0 - float(distance)
-                    results.append(
-                        RetrievalResult(
-                            chunk=self.search_chunks[index],
-                            score=score,
-                            vector_score=score,
-                            retrieval_method="vector",
-                            reason="vector=chroma",
-                        )
-                    )
-                return results
-            except Exception:
-                pass
-        if self._faiss_index is not None:
-            scores, indices = self._faiss_index.search(query_vector.reshape(1, -1), min(top_k, len(self.search_chunks)))
-            return [
+            if index < 0 or index >= len(self.search_chunks):
+                continue
+            score = 1.0 - float(distance)
+            results.append(
                 RetrievalResult(
-                    chunk=self.search_chunks[int(index)],
-                    score=float(score),
-                    vector_score=float(score),
+                    chunk=self.search_chunks[index],
+                    score=score,
+                    vector_score=score,
                     retrieval_method="vector",
-                    reason="vector",
+                    reason="vector=chroma",
                 )
-                for score, index in zip(scores[0], indices[0])
-                if index >= 0
-            ]
-        scores = self.embeddings @ query_vector
-        indices = np.argsort(scores)[::-1][:top_k]
-        return [
-            RetrievalResult(
-                chunk=self.search_chunks[int(index)],
-                score=float(scores[index]),
-                vector_score=float(scores[index]),
-                retrieval_method="vector",
-                reason="vector",
             )
-            for index in indices
-        ]
+        return results
 
     def keyword_search(self, query: str, top_k: int) -> list[RetrievalResult]:
         if not self.search_chunks:
@@ -401,7 +361,7 @@ class VectorIndex:
         (path / "chunks.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         np.save(path / "embeddings.npy", self.embeddings)
         if self.backend == "chroma":
-            self._build_chroma_if_available(path / "chroma")
+            self._build_chroma(path / "chroma")
 
     def load(self, path: Path) -> bool:
         chunks_path = path / "chunks.json"
@@ -421,8 +381,7 @@ class VectorIndex:
         if self.embeddings.ndim == 2 and self.embeddings.shape[1] > 0:
             self.embedding.dim = int(self.embeddings.shape[1])
         self._build_keyword_index()
-        self._build_chroma_if_available(path / "chroma")
-        self._build_faiss_if_available()
+        self._build_chroma(path / "chroma")
         return True
 
 

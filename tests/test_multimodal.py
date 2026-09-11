@@ -34,15 +34,15 @@ class MultimodalTests(unittest.TestCase):
             DocumentChunk("text-1", "demo.pdf", 1, "多金属结核成矿环境。"),
             DocumentChunk("image-1", "demo.pdf", 5, visual_text, modality="image"),
         ]
-        index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+        index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
         index.build(chunks)
         results = index.search("富钴结壳 稀土元素 Ce 异常 图", top_k=2, keyword_top_k=2)
         self.assertTrue(results)
         self.assertEqual(results[0].chunk.modality, "image")
 
     def test_load_old_index_without_modality(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
             index.build([DocumentChunk("old", "old.pdf", 1, "海洋矿产文本证据")])
             index.save(Path(tmp))
 
@@ -51,7 +51,7 @@ class MultimodalTests(unittest.TestCase):
             payload = payload.replace(',\n      "modality": "text"', "")
             chunks_path.write_text(payload, encoding="utf-8")
 
-            loaded = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+            loaded = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
             self.assertTrue(loaded.load(Path(tmp)))
             self.assertEqual(loaded.search_chunks[0].modality, "text")
             self.assertEqual(loaded.parent_chunks[0].modality, "text")

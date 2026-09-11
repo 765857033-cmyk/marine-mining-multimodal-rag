@@ -11,10 +11,10 @@
 - FastAPI
 - React
 - MinerU
-- Chroma 向量数据库 / numpy 兜底检索
+- Chroma 向量数据库
 - BM25 关键词检索
 - RRF 混合检索融合
-- 双分支 Rerank：轻量 CrossEncoder / BGE Reranker / 规则兜底
+- 双分支 Rerank：轻量 CrossEncoder / BGE Reranker
 - SQLite 上下文记忆与反馈存储
 
 ## 核心功能
@@ -24,7 +24,7 @@
 - 语义级图片理解：MinerU 抽取图片资产后，可调用视觉模型生成中文摘要并作为图片证据入库。
 - 父子文档切片：小块用于精准检索，大块用于保留回答上下文。
 - 混合检索：向量语义检索 + BM25 关键词检索，并使用 RRF 进行结果融合。
-- Rerank 重排：支持轻量 CrossEncoder 和 BGE `bge-reranker-v2-m3` 双分支，缺失依赖时降级为领域词和 query overlap 规则重排。
+- Rerank 重排：支持轻量 CrossEncoder 和 BGE `bge-reranker-v2-m3` 双分支；未配置模型时保留混合检索排序。
 - LLM Router：由大模型判断问题是否需要调用外部论文知识库。
 - Query Rewrite：对专业问题和追问问题进行查询改写，提高召回率。
 - Source Verification：判断检索证据是否足够支撑回答。
@@ -165,7 +165,7 @@ React 前端支持 PDF 上传、索引构建、中文问答、来源证据、Age
 VECTOR_BACKEND=chroma
 ```
 
-入库时，系统会先对父子切片后的子文档生成 embedding，再写入 Chroma collection；检索时优先通过 Chroma 做语义召回，然后与 BM25 关键词检索结果进行 RRF 融合。如果本地没有安装 `chromadb` 或 Chroma 初始化失败，系统会自动回退到 numpy 向量检索，保证 Demo 不会因为依赖问题无法运行。
+入库时，系统会先对父子切片后的子文档生成 embedding，再写入 Chroma collection；检索时通过 Chroma 做语义召回，然后与 BM25 关键词检索结果进行 RRF 融合。如果本地没有安装 `chromadb` 或 Chroma 初始化失败，系统会直接报错，便于及时发现环境问题。
 
 配置 OpenAI：
 
@@ -237,7 +237,7 @@ src/multimodal.py       多模态证据抽取与视觉摘要
 src/text_processing.py  文本清洗与切片
 src/parent_child.py     父子文档切片
 src/vector_store.py     Chroma 向量检索、BM25、RRF 混合检索
-src/rerank.py           CrossEncoder / BGE / 规则兜底重排
+src/rerank.py           CrossEncoder / BGE 双分支重排
 src/llm.py              大模型调用、Router、生成与校验
 src/citation.py         引用校验
 src/memory.py           短期、摘要和长期记忆

@@ -17,9 +17,9 @@ class MultiAgentTests(unittest.TestCase):
                 trace_dir=Path(tmp) / "traces",
                 feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
                 embedding_backend="hashing",
-                vector_backend="numpy",
+                vector_backend="chroma",
             )
-            index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+            index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
             system = MultiAgentRagSystem(config, index)
 
         self.assertEqual(

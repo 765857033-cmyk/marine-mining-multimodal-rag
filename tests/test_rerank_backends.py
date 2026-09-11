@@ -7,8 +7,12 @@ from src.rerank import Reranker
 
 
 class RerankBackendTests(unittest.TestCase):
-    def test_rule_backend_keeps_project_runnable_without_model(self):
-        reranker = Reranker(backend="rule")
+    def test_rule_backend_is_rejected(self):
+        with self.assertRaises(ValueError):
+            Reranker(backend="rule")
+
+    def test_none_backend_keeps_retrieval_order_without_rule_scoring(self):
+        reranker = Reranker(backend="none")
         results = [
             RetrievalResult(
                 DocumentChunk("a", "demo.pdf", 1, "多金属结核 氧化还原 金属来源"),
@@ -17,9 +21,10 @@ class RerankBackendTests(unittest.TestCase):
             )
         ]
         ranked = reranker.rerank("多金属结核受什么控制", results, top_k=1)
-        self.assertEqual(reranker.active_backend, "rule")
+        self.assertEqual(reranker.active_backend, "none")
         self.assertTrue(ranked)
-        self.assertIn("rerank_overlap", ranked[0].reason)
+        self.assertIsNone(ranked[0].rerank_score)
+        self.assertIn("rerank=none", ranked[0].reason)
 
     def test_bge_backend_uses_flag_reranker_when_available(self):
         original = sys.modules.get("FlagEmbedding")

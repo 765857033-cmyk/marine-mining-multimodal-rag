@@ -7,7 +7,11 @@ from src.vector_store import EmbeddingProvider, VectorIndex
 
 
 class ChromaBackendTests(unittest.TestCase):
-    def test_chroma_backend_searches_and_roundtrips_with_numpy_fallback(self):
+    def test_numpy_backend_is_rejected(self):
+        with self.assertRaises(ValueError):
+            VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+
+    def test_chroma_backend_searches_and_roundtrips(self):
         index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
         index.build(
             [

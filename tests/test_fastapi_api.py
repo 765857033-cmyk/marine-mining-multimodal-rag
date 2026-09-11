@@ -18,7 +18,7 @@ class FastApiTests(unittest.TestCase):
                 trace_dir=Path(tmp) / "traces",
                 feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
                 embedding_backend="hashing",
-                vector_backend="numpy",
+                vector_backend="chroma",
                 parser_backend="mineru",
             )
             client = TestClient(create_app(config))
@@ -40,7 +40,7 @@ class FastApiTests(unittest.TestCase):
                 trace_dir=Path(tmp) / "traces",
                 feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
                 embedding_backend="hashing",
-                vector_backend="numpy",
+                vector_backend="chroma",
             )
             client = TestClient(create_app(config))
             response = client.get("/")
@@ -57,7 +57,7 @@ class FastApiTests(unittest.TestCase):
                 trace_dir=Path(tmp) / "traces",
                 feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
                 embedding_backend="hashing",
-                vector_backend="numpy",
+                vector_backend="chroma",
             )
             client = TestClient(create_app(config))
             response = client.post("/chat", json={"question": ""})
@@ -72,7 +72,7 @@ class FastApiTests(unittest.TestCase):
                 trace_dir=Path(tmp) / "traces",
                 feedback_bad_cases_path=Path(tmp) / "bad_cases.jsonl",
                 embedding_backend="hashing",
-                vector_backend="numpy",
+                vector_backend="chroma",
             )
             client = TestClient(create_app(config))
             chat = client.post(

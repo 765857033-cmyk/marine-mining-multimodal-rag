@@ -32,7 +32,7 @@ class AgentSmokeTests(unittest.TestCase):
                 state_db_path=Path(tmp) / "state.db",
                 trace_dir=Path(tmp) / "traces",
             )
-            index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+            index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
             index.build(chunks)
             answer = MiningRagAgent(index, config).invoke(
                 "多金属结核成矿受哪些环境因素控制？",
@@ -64,7 +64,7 @@ class AgentSmokeTests(unittest.TestCase):
                 text="This paragraph discusses marine minerals and deep sea resource assessment.",
             ),
         ]
-        index = VectorIndex(EmbeddingProvider("hashing"), backend="numpy")
+        index = VectorIndex(EmbeddingProvider("hashing"), backend="chroma")
         index.build(chunks)
         results = index.search("xyz-special-token", top_k=1, keyword_top_k=2)
         self.assertTrue(results)

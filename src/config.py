@@ -62,7 +62,7 @@ class AppConfig:
     citation_min_coverage: float = 0.6
     citation_repair_max_attempts: int = 1
     trace_enabled: bool = True
-    rerank_backend: str = "auto"
+    rerank_backend: str = "none"
     rerank_model: str = ""
 
     @classmethod
@@ -127,6 +127,6 @@ class AppConfig:
             citation_min_coverage=float(os.getenv("CITATION_MIN_COVERAGE", "0.6")),
             citation_repair_max_attempts=int(os.getenv("CITATION_REPAIR_MAX_ATTEMPTS", "1")),
             trace_enabled=os.getenv("TRACE_ENABLED", "true").lower() in {"1", "true", "yes", "on"},
-            rerank_backend=os.getenv("RERANK_BACKEND", "auto").lower(),
+            rerank_backend=os.getenv("RERANK_BACKEND", "none").lower(),
             rerank_model=os.getenv("RERANK_MODEL", ""),
         )

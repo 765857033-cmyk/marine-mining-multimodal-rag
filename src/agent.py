@@ -339,7 +339,7 @@ class MiningRagAgent:
             message,
             kept=len(state.reranked),
             top_score=state.reranked[0].final_score if state.reranked else 0.0,
-            model=self.config.rerank_model or "rule",
+            model=self.config.rerank_model or "none",
             backend=self.reranker.active_backend,
         )
         return state
