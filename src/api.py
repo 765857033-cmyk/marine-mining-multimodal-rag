@@ -63,7 +63,7 @@ class LongMemoryRequest(BaseModel):
 def create_app(config: AppConfig | None = None) -> FastAPI:
     load_dotenv()
     app = FastAPI(
-        title="Mining Agentic RAG API",
+        title="Multi-Agent Multimodal RAG API",
         description="FastAPI service for PDF ingestion, Agentic RAG chat, and source tracing.",
         version="1.0.0",
     )

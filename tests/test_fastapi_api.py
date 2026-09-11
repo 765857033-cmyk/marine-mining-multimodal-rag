@@ -46,7 +46,7 @@ class FastApiTests(unittest.TestCase):
             response = client.get("/")
             self.assertEqual(response.status_code, 200)
             self.assertIn("React", response.text)
-            self.assertIn("海洋矿产 Agentic RAG", response.text)
+            self.assertIn("多 Agent 多模态 RAG", response.text)
 
     def test_chat_requires_question(self):
         with tempfile.TemporaryDirectory() as tmp:
