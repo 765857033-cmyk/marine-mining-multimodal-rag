@@ -55,7 +55,6 @@ flowchart LR
 - KnowledgeExtractAgent：负责结构化证据清洗、父子文档切片、Embedding、Chroma 向量入库和 BM25 关键词索引构建。
 - QAAgent：负责调用内部 LangGraph Agentic RAG 流程，完成 LLM Router、Query Rewrite、混合检索、Rerank、答案生成、引用校验、证据验证和记忆写入。
 
-没有加入 KnowledgeUpdateAgent，因为当前项目定位是实习简历中的科研 PDF 问答系统，知识库更新采用“上传文档后重建索引”的方式，更容易保证来源一致性和可追溯性。
 
 ## Agent 工作流
 
@@ -113,7 +112,7 @@ MINERU_METHOD=auto
 
 MinerU 适合处理科研论文中的复杂版面、表格、公式、图片、图注和图文混排内容。系统会优先读取 MinerU 导出的结构化 JSON 或 Markdown，并将文本块、表格块、图片块和图注统一转换为可检索证据。
 
-项目已取消 PyMuPDF 兜底解析。如果 MinerU 不可用，入库会直接失败并提示安装或配置 MinerU，避免不同解析器造成文档结构不一致。
+
 
 ```env
 MINERU_METHOD=ocr
@@ -125,7 +124,7 @@ MINERU_METHOD=ocr
 
 ## 前端运行
 
-项目已使用 React 替换 Streamlit。React 静态前端由 FastAPI 直接托管，不需要 npm 构建步骤：
+React 静态前端由 FastAPI 直接托管，不需要 npm 构建步骤：
 
 ```powershell
 .\run_api.ps1
@@ -151,11 +150,7 @@ http://127.0.0.1:8001
 
 React 前端支持 PDF 上传、索引构建、中文问答、来源证据、Agent 执行轨迹、记忆查看和反馈提交。
 
-## 大模型配置
 
-项目的大模型层采用 OpenAI-compatible API 封装，不强绑定某个厂商模型。
-
-未配置 API Key 时，系统会降级到规则 Router、抽取式回答和规则校验，保证基础流程可运行。
 
 ## 向量数据库
 
