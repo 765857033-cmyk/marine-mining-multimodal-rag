@@ -126,27 +126,6 @@ MINERU_METHOD=ocr
 
 React 静态前端由 FastAPI 直接托管，不需要 npm 构建步骤：
 
-```powershell
-.\run_api.ps1
-```
-
-访问：
-
-```text
-http://127.0.0.1:8000
-```
-
-如果 8000 端口已被其他服务占用，启动脚本会自动切换到：
-
-```text
-http://127.0.0.1:8001
-```
-
-也可以运行：
-
-```powershell
-.\run.ps1
-```
 
 React 前端支持 PDF 上传、索引构建、中文问答、来源证据、Agent 执行轨迹、记忆查看和反馈提交。
 
