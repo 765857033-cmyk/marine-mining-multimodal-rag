@@ -29,7 +29,7 @@ class KnowledgeBuildResult:
 class DocParserAgent:
     """文档解析 Agent：负责调用 MinerU，把 PDF 转换成结构化证据块。"""
 
-    name = "DocParserAgent"
+    name = "文档解析Agent"
 
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -55,7 +55,7 @@ class DocParserAgent:
 class KnowledgeExtractAgent:
     """知识抽取 Agent：负责父子切片、Embedding、Chroma/BM25 索引构建。"""
 
-    name = "KnowledgeExtractAgent"
+    name = "知识抽取Agent"
 
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -88,7 +88,7 @@ class KnowledgeExtractAgent:
 class QAAgent:
     """问答 Agent：负责路由、改写、混合检索、重排、生成、校验和记忆写入。"""
 
-    name = "QAAgent"
+    name = "问答Agent"
 
     def __init__(self, index: VectorIndex, config: AppConfig, memory_store: MemoryStore | None = None) -> None:
         self.agent = MiningRagAgent(index, config, memory_store=memory_store)
@@ -106,14 +106,14 @@ class QAAgent:
             session_id=session_id,
             memory_scope=memory_scope,
         )
-        answer.trace.insert(0, f"{self.name}: received question and delegated to LangGraph Agentic RAG workflow")
+        answer.trace.insert(0, f"{self.name}：接收用户问题，并交给 LangGraph 问答流程执行")
         answer.trace_events.insert(
             0,
             {
                 "node": self.name,
                 "elapsed_ms": 0.0,
                 "question_chars": len(question),
-                "responsibility": "router + query rewrite + hybrid retrieval + rerank + generation + verification",
+                "responsibility": "大模型路由 + 查询改写 + 混合检索 + 重排 + 答案生成 + 证据验证",
             },
         )
         return answer

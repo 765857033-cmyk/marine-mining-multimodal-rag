@@ -24,7 +24,7 @@ class MultiAgentTests(unittest.TestCase):
 
         self.assertEqual(
             system.agent_names,
-            ["DocParserAgent", "KnowledgeExtractAgent", "QAAgent"],
+            ["文档解析Agent", "知识抽取Agent", "问答Agent"],
         )
         self.assertNotIn("KnowledgeUpdateAgent", system.agent_names)
 

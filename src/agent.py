@@ -15,6 +15,17 @@ from .text_processing import DOMAIN_TERMS, domain_term_hits, is_casual_question
 from .vector_store import VectorIndex
 
 
+NODE_ANALYZE = "问题分析"
+NODE_QUERY_REWRITE = "查询改写"
+NODE_HYBRID_RETRIEVE = "混合检索"
+NODE_RERANK = "重排"
+NODE_GENERATE = "答案生成"
+NODE_CITATION_VALIDATION = "引用校验"
+NODE_CITATION_REPAIR = "引用修复"
+NODE_SOURCE_VERIFICATION = "证据验证"
+NODE_DIRECT = "直接回答"
+
+
 @dataclass
 class AgentState:
     question: str
@@ -184,36 +195,39 @@ class MiningRagAgent:
 
         try:
             graph = StateGraph(AgentState)
-            graph.add_node("analyze", self._analyze_question)
-            graph.add_node("query_rewrite", self._rewrite_query)
-            graph.add_node("hybrid_retrieve", self._hybrid_retrieve)
-            graph.add_node("rerank", self._rerank)
-            graph.add_node("generate", self._generate)
-            graph.add_node("citation_validation", self._validate_citations)
-            graph.add_node("citation_repair", self._repair_citations)
-            graph.add_node("source_verification", self._verify_sources)
-            graph.add_node("direct", self._direct_answer)
-            graph.set_entry_point("analyze")
-            graph.add_conditional_edges("analyze", lambda s: "query_rewrite" if s.need_retrieval else "direct")
-            graph.add_edge("query_rewrite", "hybrid_retrieve")
-            graph.add_edge("hybrid_retrieve", "rerank")
-            graph.add_edge("rerank", "generate")
-            graph.add_edge("generate", "citation_validation")
+            graph.add_node(NODE_ANALYZE, self._analyze_question)
+            graph.add_node(NODE_QUERY_REWRITE, self._rewrite_query)
+            graph.add_node(NODE_HYBRID_RETRIEVE, self._hybrid_retrieve)
+            graph.add_node(NODE_RERANK, self._rerank)
+            graph.add_node(NODE_GENERATE, self._generate)
+            graph.add_node(NODE_CITATION_VALIDATION, self._validate_citations)
+            graph.add_node(NODE_CITATION_REPAIR, self._repair_citations)
+            graph.add_node(NODE_SOURCE_VERIFICATION, self._verify_sources)
+            graph.add_node(NODE_DIRECT, self._direct_answer)
+            graph.set_entry_point(NODE_ANALYZE)
             graph.add_conditional_edges(
-                "citation_validation",
-                lambda s: "source_verification"
+                NODE_ANALYZE,
+                lambda s: NODE_QUERY_REWRITE if s.need_retrieval else NODE_DIRECT,
+            )
+            graph.add_edge(NODE_QUERY_REWRITE, NODE_HYBRID_RETRIEVE)
+            graph.add_edge(NODE_HYBRID_RETRIEVE, NODE_RERANK)
+            graph.add_edge(NODE_RERANK, NODE_GENERATE)
+            graph.add_edge(NODE_GENERATE, NODE_CITATION_VALIDATION)
+            graph.add_conditional_edges(
+                NODE_CITATION_VALIDATION,
+                lambda s: NODE_SOURCE_VERIFICATION
                 if s.citation_validation.get("passed", False)
                 or s.citation_repair_attempts >= self.config.citation_repair_max_attempts
-                else "citation_repair",
+                else NODE_CITATION_REPAIR,
             )
-            graph.add_edge("citation_repair", "citation_validation")
+            graph.add_edge(NODE_CITATION_REPAIR, NODE_CITATION_VALIDATION)
             graph.add_conditional_edges(
-                "source_verification",
+                NODE_SOURCE_VERIFICATION,
                 lambda s: END
                 if s.verification_passed or s.retrieval_round >= self.config.max_retrieval_rounds
-                else "query_rewrite",
+                else NODE_QUERY_REWRITE,
             )
-            graph.add_edge("direct", END)
+            graph.add_edge(NODE_DIRECT, END)
             return graph.compile()
         except Exception:
             return None
@@ -230,11 +244,11 @@ class MiningRagAgent:
             state.router_confidence = float(router_decision.get("confidence", 0.0))
             self._record(
                 state,
-                "analyze",
+                NODE_ANALYZE,
                 started,
-                "llm_router: "
-                f"route={state.route}, need_retrieval={state.need_retrieval}, "
-                f"confidence={state.router_confidence:.2f}, reason={state.router_reason}",
+                "大模型路由："
+                f"路径={state.route}，是否检索={state.need_retrieval}，"
+                f"置信度={state.router_confidence:.2f}，原因={state.router_reason}",
                 router="llm",
                 route=state.route,
                 need_retrieval=state.need_retrieval,
@@ -258,9 +272,9 @@ class MiningRagAgent:
         state.router_confidence = 0.45
         self._record(
             state,
-            "analyze",
+            NODE_ANALYZE,
             started,
-            f"rule_router: route={state.route}, need_retrieval={state.need_retrieval}, reason={state.router_reason}",
+            f"规则路由：路径={state.route}，是否检索={state.need_retrieval}，原因={state.router_reason}",
             router="rule",
             route=state.route,
             need_retrieval=state.need_retrieval,
@@ -284,10 +298,10 @@ class MiningRagAgent:
         state.query_history.append(state.rewritten_query)
         self._record(
             state,
-            "query_rewrite",
+            NODE_QUERY_REWRITE,
             started,
-            f"query_rewrite: round={state.retrieval_round + 1}, variants={len(state.query_variants)}, "
-            f"primary={state.rewritten_query}",
+            f"查询改写：轮次={state.retrieval_round + 1}，候选查询={len(state.query_variants)}，"
+            f"主查询={state.rewritten_query}",
             round=state.retrieval_round + 1,
             primary=state.rewritten_query,
             variants=state.query_variants,
@@ -313,10 +327,10 @@ class MiningRagAgent:
         keyword_hits = sum(1 for item in state.retrieved if "bm25_rank" in item.reason)
         self._record(
             state,
-            "hybrid_retrieve",
+            NODE_HYBRID_RETRIEVE,
             started,
-            f"hybrid_retrieval: round={state.retrieval_round}, candidates={len(state.retrieved)}, "
-            f"queries={len(query_results)}, vector_hits={vector_hits}, keyword_hits={keyword_hits}",
+            f"混合检索：轮次={state.retrieval_round}，候选证据={len(state.retrieved)}，"
+            f"查询数={len(query_results)}，向量命中={vector_hits}，关键词命中={keyword_hits}",
             round=state.retrieval_round,
             candidates=len(state.retrieved),
             query_count=len(query_results),
@@ -329,12 +343,12 @@ class MiningRagAgent:
         started = start_timer()
         state.reranked = self.reranker.rerank(state.rewritten_query, state.retrieved, self.config.rerank_top_k)
         if state.reranked and state.reranked[0].final_score < self.config.min_relevance:
-            message = "rerank: low confidence"
+            message = "重排：低置信度"
         else:
-            message = f"rerank: kept={len(state.reranked)}"
+            message = f"重排：保留证据={len(state.reranked)}"
         self._record(
             state,
-            "rerank",
+            NODE_RERANK,
             started,
             message,
             kept=len(state.reranked),
@@ -354,9 +368,9 @@ class MiningRagAgent:
         )
         self._record(
             state,
-            "generate",
+            NODE_GENERATE,
             started,
-            "generation: completed",
+            "答案生成：完成",
             backend=self.generator.backend_name,
             answer_chars=len(state.answer),
             evidence_count=len(state.reranked),
@@ -376,9 +390,9 @@ class MiningRagAgent:
         state.citation_validation = validation.to_dict()
         self._record(
             state,
-            "citation_validation",
+            NODE_CITATION_VALIDATION,
             started,
-            f"citation_validation: passed={validation.passed}, reason={validation.reason}",
+            f"引用校验：通过={validation.passed}，原因={validation.reason}",
             **state.citation_validation,
         )
         return state
@@ -394,9 +408,9 @@ class MiningRagAgent:
         )
         self._record(
             state,
-            "citation_repair",
+            NODE_CITATION_REPAIR,
             started,
-            f"citation_repair: attempt={state.citation_repair_attempts}",
+            f"引用修复：次数={state.citation_repair_attempts}",
             attempt=state.citation_repair_attempts,
             backend=self.generator.backend_name,
         )
@@ -413,9 +427,9 @@ class MiningRagAgent:
         )
         self._record(
             state,
-            "source_verification",
+            NODE_SOURCE_VERIFICATION,
             started,
-            f"source_verification: passed={state.verification_passed}, reason={state.verification_reason}",
+            f"证据验证：通过={state.verification_passed}，原因={state.verification_reason}",
             passed=state.verification_passed,
             reason=state.verification_reason,
             retrieval_round=state.retrieval_round,
@@ -442,9 +456,9 @@ class MiningRagAgent:
         state.answer = self.generator.direct_answer(state.question)
         self._record(
             state,
-            "direct",
+            NODE_DIRECT,
             started,
-            "direct_answer: completed",
+            "直接回答：完成",
             backend=self.generator.backend_name,
             answer_chars=len(state.answer),
         )

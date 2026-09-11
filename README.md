@@ -1,6 +1,6 @@
 # 基于 Agentic RAG 的海洋矿产科研文献智能问答系统
 
-这是一个面向海洋矿产与深海科研论文的智能问答 Agent 项目。系统支持 PDF 文献解析、文本清洗、父子文档切片、混合检索、Rerank、LLM Router、答案生成、来源追溯、引用校验、证据充分性判断、低置信度重检索、上下文记忆、Trace Debug、用户反馈闭环、FastAPI 服务化、React 可视化前端和离线评测。
+这是一个面向海洋矿产与深海科研论文的智能问答 Agent 项目。系统支持 PDF 文献解析、文本清洗、父子文档切片、混合检索、重排、大模型路由、答案生成、来源追溯、引用校验、证据充分性判断、低置信度重检索、上下文记忆、执行轨迹调试、用户反馈闭环、FastAPI 服务化、React 可视化前端和离线评测。
 
 项目适合用于海洋矿产、深海多金属结核、富钴结壳、热液硫化物、地球化学指标、矿物识别和科研文献阅读场景。
 
@@ -14,7 +14,7 @@
 - Chroma 向量数据库
 - BM25 关键词检索
 - RRF 混合检索融合
-- 双分支 Rerank：轻量 CrossEncoder / BGE Reranker
+- 双分支重排：轻量 CrossEncoder / BGE Reranker
 - SQLite 上下文记忆与反馈存储
 
 ## 核心功能
@@ -24,17 +24,17 @@
 - 语义级图片理解：MinerU 抽取图片资产后，可调用视觉模型生成中文摘要并作为图片证据入库。
 - 父子文档切片：小块用于精准检索，大块用于保留回答上下文。
 - 混合检索：向量语义检索 + BM25 关键词检索，并使用 RRF 进行结果融合。
-- Rerank 重排：支持轻量 CrossEncoder 和 BGE `bge-reranker-v2-m3` 双分支；未配置模型时保留混合检索排序。
-- LLM Router：由大模型判断问题是否需要调用外部论文知识库。
-- Query Rewrite：对专业问题和追问问题进行查询改写，提高召回率。
-- Source Verification：判断检索证据是否足够支撑回答。
-- Citation Validator：校验回答中的引用编号、来源文档和页码是否真实来自检索证据。
-- 低置信度重检索：证据不足时进入 query rewrite 后再次检索，默认最多 2 轮。
+- 重排：支持轻量 CrossEncoder 和 BGE `bge-reranker-v2-m3` 双分支；未配置模型时保留混合检索排序。
+- 大模型路由：由大模型判断问题是否需要调用外部论文知识库。
+- 查询改写：对专业问题和追问问题进行查询改写，提高召回率。
+- 证据充分性验证：判断检索证据是否足够支撑回答。
+- 引用校验器：校验回答中的引用编号、来源文档和页码是否真实来自检索证据。
+- 低置信度重检索：证据不足时进入查询改写后再次检索，默认最多 2 轮。
 - 上下文记忆：支持短期滑动窗口记忆、摘要记忆和显式长期记忆。
-- Trace Debug：记录每个 Agent 节点的输入、输出、耗时和关键决策。
+- 执行轨迹调试：记录每个 Agent 节点的输入、输出、耗时和关键决策。
 - 反馈闭环：支持用户点赞、点踩、纠错和人工审核，负反馈可进入评测坏例集。
-- FastAPI 服务化：提供文档上传、索引构建、问答、记忆、反馈和 trace 查询接口。
-- 多 Agent 编排：拆分为 DocParserAgent、KnowledgeExtractAgent 和 QAAgent，不包含增量更新 Agent。
+- FastAPI 服务化：提供文档上传、索引构建、问答、记忆、反馈和执行轨迹查询接口。
+- 多 Agent 编排：拆分为文档解析 Agent、知识抽取 Agent 和问答 Agent，不包含增量更新 Agent。
 - 离线评测：支持 Hit@K、MRR、Citation Accuracy、Faithfulness、Refusal Accuracy 等指标。
 
 ## 多 Agent 架构
@@ -43,34 +43,34 @@
 
 ```mermaid
 flowchart LR
-    A[用户上传 PDF] --> B[DocParserAgent 文档解析]
-    B --> C[KnowledgeExtractAgent 知识抽取与索引构建]
+    A[用户上传 PDF] --> B[文档解析 Agent]
+    B --> C[知识抽取 Agent]
     C --> D[Chroma / BM25 知识库]
-    E[用户问题] --> F[QAAgent 问答 Agent]
+    E[用户问题] --> F[问答 Agent]
     F --> D
-    F --> G[中文回答 + 来源 + Trace]
+    F --> G[中文回答 + 来源 + 执行轨迹]
 ```
 
-- DocParserAgent：负责调用 MinerU，完成 PDF 版面解析、OCR、表格/公式/图片/图注抽取和图片中文语义摘要。
-- KnowledgeExtractAgent：负责结构化证据清洗、父子文档切片、Embedding、Chroma 向量入库和 BM25 关键词索引构建。
-- QAAgent：负责调用内部 LangGraph Agentic RAG 流程，完成 LLM Router、Query Rewrite、混合检索、Rerank、答案生成、引用校验、证据验证和记忆写入。
+- 文档解析 Agent：负责调用 MinerU，完成 PDF 版面解析、OCR、表格/公式/图片/图注抽取和图片中文语义摘要。
+- 知识抽取 Agent：负责结构化证据清洗、父子文档切片、Embedding、Chroma 向量入库和 BM25 关键词索引构建。
+- 问答 Agent：负责调用内部 LangGraph Agentic RAG 流程，完成大模型路由、查询改写、混合检索、重排、答案生成、引用校验、证据验证和记忆写入。
 
 
 ## Agent 工作流
 
 ```mermaid
 flowchart TD
-    A[用户问题] --> B[LLM Router 意图识别]
-    B -->|无需外部知识库| C[Direct Answer]
-    B -->|需要外部知识库| D[Query Rewrite]
-    D --> E[Hybrid Retrieval]
+    A[用户问题] --> B[大模型路由]
+    B -->|无需外部知识库| C[直接回答]
+    B -->|需要外部知识库| D[查询改写]
+    D --> E[混合检索]
     E --> F[RRF 融合]
-    F --> G[Rerank]
-    G --> H[Answer Generation]
-    H --> I[Citation Validation]
-    I -->|引用不合格且未超过次数| J[Citation Repair]
+    F --> G[重排]
+    G --> H[答案生成]
+    H --> I[引用校验]
+    I -->|引用不合格且未超过次数| J[引用修复]
     J --> I
-    I --> K[Source Verification]
+    I --> K[证据充分性验证]
     K -->|证据充分| L[最终中文回答 + 来源]
     K -->|证据不足且未超过轮次| D
     K -->|仍不足| M[拒答或保守回答]
@@ -84,7 +84,7 @@ flowchart TD
 2. BM25 检索：通过关键词匹配召回专业术语、矿物名称、元素符号和地名等精确词。
 3. RRF 融合：融合向量检索和关键词检索的排名。
 4. 父文档回填：命中子块后回填父文档上下文。
-5. Rerank：对候选证据重新排序，选择最相关的片段进入生成节点。
+5. 重排：对候选证据重新排序，选择最相关的片段进入生成节点。
 
 兼顾语义召回和术语精确匹配，适合科研论文中大量专有名词、英文术语、元素符号和表格数据并存的场景。
 
@@ -97,7 +97,7 @@ flowchart TD
 - 摘要记忆：当短期窗口超出限制时，将旧对话压缩成摘要。
 - 长期记忆：保存用户显式写入的稳定偏好、背景信息或长期约束。
 
-记忆只用于理解问题和补全上下文，不能替代论文证据。RAG 回答只有同时通过 Source Verification 和 Citation Validator 后，才会写入 Agent 记忆。
+记忆只用于理解问题和补全上下文，不能替代论文证据。RAG 回答只有同时通过证据充分性验证和引用校验器后，才会写入 Agent 记忆。
 
 ## PDF 解析
 
@@ -216,7 +216,7 @@ src/llm.py              大模型调用、Router、生成与校验
 src/citation.py         引用校验
 src/memory.py           短期、摘要和长期记忆
 src/feedback.py         用户反馈闭环
-src/observability.py    Trace Debug
+src/observability.py    执行轨迹调试
 tools/evaluate.py       离线评测脚本
 tests/                  单元测试
 docs/                   设计说明文档
